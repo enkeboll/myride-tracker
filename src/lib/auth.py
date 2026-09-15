@@ -2,7 +2,7 @@ import time
 import logging
 import aiohttp
 from typing import Optional
-from config import settings
+from .config import settings
 
 logger = logging.getLogger("myride.auth")
 

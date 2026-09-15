@@ -1,7 +1,7 @@
 import pytest
 import json
 from unittest.mock import AsyncMock
-from signalr_client import SignalRClient, RECORD_SEPARATOR
+from lib.signalr_client import SignalRClient, RECORD_SEPARATOR
 
 def test_build_ws_url():
     client = SignalRClient(

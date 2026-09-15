@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 import aiohttp
-from api_client import MyRideAPIClient
+from lib.api_client import MyRideAPIClient
 
 @pytest.mark.asyncio
 async def test_get_user_info(user_info_fixture):

@@ -2,8 +2,8 @@ import json
 from datetime import datetime, timezone
 from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from config import settings
-from models import Base, BusLocation, StudentRecord
+from .config import settings
+from .models import Base, BusLocation, StudentRecord
 
 engine = create_async_engine(
     settings.db_url,
@@ -69,7 +69,6 @@ async def save_student(session: AsyncSession, data: dict, tenant_id: str = None)
     await session.merge(record)
     await session.commit()
     return record
-
 
 async def get_recent_bus_locations(session: AsyncSession, limit: int = 50):
     stmt = select(BusLocation).order_by(BusLocation.id.desc()).limit(limit)

@@ -1,7 +1,7 @@
 import pytest
 import time
 from unittest.mock import patch
-from auth import AuthManager
+from lib.auth import AuthManager
 
 def test_auth_manager_initialization():
     auth = AuthManager(refresh_token="test_refresh_token")
@@ -18,6 +18,6 @@ def test_set_tokens():
 @pytest.mark.asyncio
 async def test_get_valid_access_token_raises_without_credentials():
     auth = AuthManager(refresh_token=None)
-    with patch("config.settings.myride_username", None), patch("config.settings.myride_password", None):
+    with patch("lib.config.settings.myride_username", None), patch("lib.config.settings.myride_password", None):
         with pytest.raises(ValueError, match="No valid token, refresh token, or username/password credentials provided"):
             await auth.get_valid_access_token()

@@ -3,7 +3,7 @@ import asyncio
 import logging
 import aiohttp
 from typing import Optional, Callable, Awaitable
-from config import settings
+from .config import settings
 
 logger = logging.getLogger("myride.signalr")
 

@@ -2,10 +2,10 @@ import os
 import logging
 from aiohttp import web
 from sqlalchemy import select, func
-from config import settings
-from scheduler import get_active_window_info, is_bus_active_time
-from db import AsyncSessionLocal, get_recent_bus_locations
-from models import BusLocation, StudentRecord
+from lib.config import settings
+from lib.scheduler import get_active_window_info, is_bus_active_time
+from lib.db import AsyncSessionLocal, get_recent_bus_locations
+from lib.models import BusLocation, StudentRecord
 
 logger = logging.getLogger("myride.web")
 

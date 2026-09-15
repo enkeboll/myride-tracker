@@ -1,7 +1,7 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from typing import Tuple
-from config import settings
+from .config import settings
 
 ET_TIMEZONE = ZoneInfo("America/New_York")
 

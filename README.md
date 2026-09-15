@@ -1,6 +1,33 @@
 # MyRide K12 Bus Location Tracker, Schedule Manager & Web Dashboard
 
-A Python backend service and web dashboard that authenticates with **MyRide K12 (AWS Cognito)**, negotiates an **ASP.NET Core SignalR WebSocket** stream, receives real-time bus location updates, and logs them into a local **SQLite WAL** database (portable to Synology NAS via Docker).
+A modern Python backend service and web dashboard that authenticates with **MyRide K12 (AWS Cognito)**, negotiates an **ASP.NET Core SignalR WebSocket** stream, receives real-time bus location updates, and logs them into a local **SQLite WAL** database (portable to Synology NAS via Docker).
+
+---
+
+## Project Organization
+
+```text
+myride-tracker/
+├── src/
+│   ├── lib/                  # Domain logic, models, API & WebSocket client
+│   │   ├── config.py         # Settings & environment variables
+│   │   ├── auth.py           # AWS Cognito authentication token manager
+│   │   ├── api_client.py     # REST API client (/api/user, /api/student, negotiate)
+│   │   ├── signalr_client.py # SignalR WebSocket client & \x1e frame protocol
+│   │   ├── models.py         # Async SQLAlchemy 2.0 ORM models
+│   │   ├── db.py             # SQLite WAL database engine & repository helpers
+│   │   └── scheduler.py      # Active bus window scheduler (Mon-Fri 7:45-8:50 AM ET)
+│   ├── web/                  # Web server & static front-end assets
+│   │   ├── server.py         # Async aiohttp REST API server & static file router
+│   │   └── static/           # Front-end dashboard (index.html, style.css, app.js)
+│   └── server/               # Service daemon & CLI entrypoints
+│       └── main.py           # CLI subcommands (test-auth, test-ws, run, history, web)
+├── tests/                    # Unit & integration test suite (15 tests)
+├── pyproject.toml
+├── requirements.txt
+├── Dockerfile
+└── docker-compose.yml
+```
 
 ---
 
@@ -14,10 +41,7 @@ A Python backend service and web dashboard that authenticates with **MyRide K12 
   - **Bus Status Cards**: Real-time speed, heading, assigned bus number (e.g. Bus #53), student details, and last reported timestamp.
   - **Location History Table**: Filterable history table displaying recorded points.
 - **Automated Authentication**: Authenticates directly using your MyRide username and password via AWS Cognito `USER_PASSWORD_AUTH` (or long-lived `refresh_token`), automatically renewing access tokens.
-- **REST API Discovery**: Automatically fetches user metadata, district tenant ID GUID, and assigned student bus numbers.
-- **SignalR WebSocket Streaming**: Connects to `wss://myridek12.tylerapi.com/livevehiclehub`, parses SignalR JSON protocol record delimiters (`\x1e`), handles 15-second keep-alive pings (`type: 6`), and dispatches live `NewLocation` updates.
 - **SQLite WAL Storage**: Asynchronously logs bus coordinates (`asset_unique_id`, `latitude`, `longitude`, `speed`, `heading`, `log_time`, and `raw_payload`) into `myride.db` using SQLite Write-Ahead Logging mode (`PRAGMA journal_mode=WAL;`).
-- **Docker & NAS Ready**: Containerized with a multi-stage `Dockerfile` and `docker-compose.yml` for Synology NAS deployment with persistent database volumes.
 
 ---
 

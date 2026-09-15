@@ -1,8 +1,8 @@
 import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-from models import Base
-from db import save_bus_location, save_student, get_recent_bus_locations
+from lib.models import Base
+from lib.db import save_bus_location, save_student, get_recent_bus_locations
 
 @pytest_asyncio.fixture
 async def in_memory_db():

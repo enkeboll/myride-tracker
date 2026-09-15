@@ -1,6 +1,6 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from scheduler import is_bus_active_time, get_active_window_info
+from lib.scheduler import is_bus_active_time, get_active_window_info
 
 ET = ZoneInfo("America/New_York")
 

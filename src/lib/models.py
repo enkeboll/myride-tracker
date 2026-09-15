@@ -37,4 +37,3 @@ class StudentRecord(Base):
     active_vehicle: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     tenant_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
-
