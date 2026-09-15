@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+myride.db
+myride.db-wal
+myride.db-shm
+data/
+.pytest_cache/
+*.har
