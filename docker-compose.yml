@@ -10,4 +10,8 @@ services:
     env_file:
       - .env
     volumes:
-      - ./data:/app/data
+      - myride-data:/app/data
+
+volumes:
+  myride-data:
+    driver: local
