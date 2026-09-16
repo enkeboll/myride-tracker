@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  myride-tracker:
+    image: ghcr.io/enkeboll/myride-tracker:latest
+    container_name: myride-tracker
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    volumes:
+      - myride-data:/app/data
+
+volumes:
+  myride-data:
+    driver: local
