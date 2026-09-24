@@ -1,7 +1,9 @@
 import pytest
 from aiohttp.test_utils import TestClient, TestServer
-from web.server import create_web_app
+
 from lib.db import init_db
+from web.server import create_web_app
+
 
 @pytest.mark.asyncio
 async def test_web_app_index_and_api():

@@ -1,19 +1,18 @@
-import pytest
 import json
-from unittest.mock import AsyncMock
-from lib.signalr_client import SignalRClient, RECORD_SEPARATOR
+
+import pytest
+
+from lib.signalr_client import SignalRClient
+
 
 def test_build_ws_url():
-    client = SignalRClient(
-        tenant_id="tenant_abc",
-        connection_token="conn_token_123",
-        access_token="access_tok_456"
-    )
+    client = SignalRClient(tenant_id="tenant_abc", connection_token="conn_token_123", access_token="access_tok_456")
     url = client.build_ws_url()
     assert "x-tenant-id=tenant_abc" in url
     assert "id=conn_token_123" in url
     assert "access_token=access_tok_456" in url
     assert url.startswith("wss://myridek12.tylerapi.com/livevehiclehub")
+
 
 @pytest.mark.asyncio
 async def test_handle_record_location_callback(ws_location_payload):
@@ -26,7 +25,7 @@ async def test_handle_record_location_callback(ws_location_payload):
         tenant_id="tenant_abc",
         connection_token="conn_token_123",
         access_token="access_tok_456",
-        on_location=mock_callback
+        on_location=mock_callback,
     )
 
     record_str = json.dumps(ws_location_payload)

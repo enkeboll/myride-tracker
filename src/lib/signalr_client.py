@@ -1,8 +1,10 @@
-import json
 import asyncio
+import json
 import logging
+from collections.abc import Awaitable, Callable
+
 import aiohttp
-from typing import Optional, Callable, Awaitable
+
 from .config import settings
 
 logger = logging.getLogger("myride.signalr")
@@ -20,14 +22,15 @@ DEFAULT_WS_HEADERS = {
     "x-signalr-user-agent": "Microsoft SignalR/10.0 (10.0.0+b0f34d51fccc69fd334253924abd8d6853fad7aa; Unknown OS; .NET; .NET 10.0.11)",
 }
 
+
 class SignalRClient:
     def __init__(
         self,
         tenant_id: str,
         connection_token: str,
         access_token: str,
-        on_location: Optional[Callable[[dict, str], Awaitable[None]]] = None,
-        ws_base_url: Optional[str] = None
+        on_location: Callable[[dict, str], Awaitable[None]] | None = None,
+        ws_base_url: str | None = None,
     ):
         self.tenant_id = tenant_id
         self.connection_token = connection_token
@@ -47,7 +50,7 @@ class SignalRClient:
         )
         return url
 
-    async def connect_and_listen(self, session: Optional[aiohttp.ClientSession] = None, max_seconds: Optional[int] = None):
+    async def connect_and_listen(self, session: aiohttp.ClientSession | None = None, max_seconds: int | None = None):
         ws_url = self.build_ws_url()
         logger.info("Connecting to SignalR WebSocket: %s", ws_url.split("access_token=")[0] + "access_token=redacted")
 
@@ -68,7 +71,9 @@ class SignalRClient:
 
                 # 2. Receive Handshake Response
                 msg = await ws.receive()
-                resp_text = msg.data.rstrip(RECORD_SEPARATOR) if hasattr(msg, "data") and isinstance(msg.data, str) else ""
+                resp_text = (
+                    msg.data.rstrip(RECORD_SEPARATOR) if hasattr(msg, "data") and isinstance(msg.data, str) else ""
+                )
                 logger.info("Received SignalR handshake response: %s", resp_text)
 
                 # Start ping background task
@@ -113,7 +118,7 @@ class SignalRClient:
             return
 
         msg_type = data.get("type")
-        
+
         # Ping frame
         if msg_type == 6:
             logger.debug("Received SignalR ping (type 6)")
@@ -132,7 +137,7 @@ class SignalRClient:
                     location_data.get("logTime"),
                     location_data.get("latitude"),
                     location_data.get("longitude"),
-                    location_data.get("speed")
+                    location_data.get("speed"),
                 )
                 if self.on_location:
                     await self.on_location(location_data, record_str)

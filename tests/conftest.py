@@ -1,5 +1,6 @@
 import pytest
 
+
 @pytest.fixture
 def user_info_fixture():
     return {
@@ -7,7 +8,7 @@ def user_info_fixture():
             {
                 "groupGuid": "9de7762a-ef18-45d7-a9a4-d3acc86501d1",
                 "name": "QUAD VILLAGE TRANSPORTATION - ARDSLEY, NY",
-                "proxyUrl": None
+                "proxyUrl": None,
             }
         ],
         "userGuid": "b402f215-7cfa-44bb-a140-2eed977cf264",
@@ -17,6 +18,7 @@ def user_info_fixture():
         "email": "andyenkeboll@gmail.com",
         "isBetaUser": False,
     }
+
 
 @pytest.fixture
 def student_info_fixture():
@@ -34,9 +36,10 @@ def student_info_fixture():
                     "rolloutBusNumber": "53",
                     "assetUniqueId": "53",
                 }
-            ]
+            ],
         }
     ]
+
 
 @pytest.fixture
 def negotiate_fixture():
@@ -44,10 +47,9 @@ def negotiate_fixture():
         "negotiateVersion": 1,
         "connectionId": "CUpxWFcR7Eul-ukQQLy4SA",
         "connectionToken": "sample_connection_token_12345",
-        "availableTransports": [
-            {"transport": "WebSockets", "transferFormats": ["Text", "Binary"]}
-        ]
+        "availableTransports": [{"transport": "WebSockets", "transferFormats": ["Text", "Binary"]}],
     }
+
 
 @pytest.fixture
 def ws_location_payload():
@@ -68,7 +70,7 @@ def ws_location_payload():
                 "closestDirectionId": None,
                 "distanceToClosestDirection": 0,
                 "distanceToStartPoint": 0,
-                "distanceToEndPoint": 0
+                "distanceToEndPoint": 0,
             }
-        ]
+        ],
     }

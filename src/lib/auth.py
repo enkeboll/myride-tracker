@@ -1,23 +1,27 @@
-import time
 import logging
+import time
+
 import aiohttp
-from typing import Optional
+
 from .config import settings
 
 logger = logging.getLogger("myride.auth")
 
+
 class AuthManager:
-    def __init__(self, refresh_token: Optional[str] = None):
+    def __init__(self, refresh_token: str | None = None):
         configured_ref = settings.myride_refresh_token
         if configured_ref and "your_cognito_refresh_token" in configured_ref:
             configured_ref = None
 
         self.refresh_token = refresh_token or configured_ref
-        self.access_token: Optional[str] = None
-        self.id_token: Optional[str] = None
+        self.access_token: str | None = None
+        self.id_token: str | None = None
         self.expires_at: float = 0.0
 
-    def set_tokens(self, access_token: str, refresh_token: Optional[str] = None, expires_in: int = 3600, id_token: Optional[str] = None):
+    def set_tokens(
+        self, access_token: str, refresh_token: str | None = None, expires_in: int = 3600, id_token: str | None = None
+    ):
         self.access_token = access_token
         if refresh_token:
             self.refresh_token = refresh_token
@@ -29,7 +33,7 @@ class AuthManager:
     def is_token_valid(self) -> bool:
         return bool(self.access_token and time.time() < self.expires_at)
 
-    async def get_valid_access_token(self, session: Optional[aiohttp.ClientSession] = None) -> str:
+    async def get_valid_access_token(self, session: aiohttp.ClientSession | None = None) -> str:
         if self.is_token_valid():
             return self.access_token
 
@@ -48,18 +52,14 @@ class AuthManager:
 
             # 2. Fall back to Username & Password Authentication
             if settings.myride_username and settings.myride_password:
-                return await self.login_with_credentials(
-                    settings.myride_username,
-                    settings.myride_password,
-                    session
-                )
+                return await self.login_with_credentials(settings.myride_username, settings.myride_password, session)
 
             raise ValueError("No valid token, refresh token, or username/password credentials provided.")
         finally:
             if close_session:
                 await session.close()
 
-    async def refresh_access_token(self, session: Optional[aiohttp.ClientSession] = None) -> str:
+    async def refresh_access_token(self, session: aiohttp.ClientSession | None = None) -> str:
         if not self.refresh_token:
             raise ValueError("Cannot refresh access token: refresh_token is missing.")
 
@@ -90,29 +90,25 @@ class AuthManager:
                 id_token = data.get("id_token")
 
                 self.set_tokens(
-                    access_token=access_token,
-                    refresh_token=new_refresh_token,
-                    expires_in=expires_in,
-                    id_token=id_token
+                    access_token=access_token, refresh_token=new_refresh_token, expires_in=expires_in, id_token=id_token
                 )
                 return access_token
         finally:
             if close_session:
                 await session.close()
 
-    async def login_with_credentials(self, username: str, password: str, session: Optional[aiohttp.ClientSession] = None) -> str:
+    async def login_with_credentials(
+        self, username: str, password: str, session: aiohttp.ClientSession | None = None
+    ) -> str:
         url = "https://cognito-idp.us-east-1.amazonaws.com"
         headers = {
             "Content-Type": "application/x-amz-json-1.1",
-            "X-Amz-Target": "AWSCognitoIdentityProviderService.InitiateAuth"
+            "X-Amz-Target": "AWSCognitoIdentityProviderService.InitiateAuth",
         }
         payload = {
             "AuthFlow": "USER_PASSWORD_AUTH",
             "ClientId": settings.cognito_client_id,
-            "AuthParameters": {
-                "USERNAME": username,
-                "PASSWORD": password
-            }
+            "AuthParameters": {"USERNAME": username, "PASSWORD": password},
         }
 
         close_session = False
@@ -138,10 +134,7 @@ class AuthManager:
                     raise Exception(f"Authentication response missing AccessToken: {data}")
 
                 self.set_tokens(
-                    access_token=access_token,
-                    refresh_token=refresh_token,
-                    expires_in=expires_in,
-                    id_token=id_token
+                    access_token=access_token, refresh_token=refresh_token, expires_in=expires_in, id_token=id_token
                 )
                 logger.info("Successfully authenticated with username/password!")
                 return access_token

@@ -1,9 +1,10 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from typing import Tuple
+
 from .config import settings
 
 ET_TIMEZONE = ZoneInfo("America/New_York")
+
 
 def is_bus_active_time(dt: datetime = None, ignore_schedule: bool = None) -> bool:
     """
@@ -27,12 +28,13 @@ def is_bus_active_time(dt: datetime = None, ignore_schedule: bool = None) -> boo
         return False
 
     current_minutes = now.hour * 60 + now.minute
-    start_minutes = 7 * 60 + 45   # 7:45 AM
-    end_minutes = 8 * 60 + 50     # 8:50 AM
+    start_minutes = 7 * 60 + 45  # 7:45 AM
+    end_minutes = 8 * 60 + 50  # 8:50 AM
 
     return start_minutes <= current_minutes <= end_minutes
 
-def get_active_window_info(dt: datetime = None) -> Tuple[bool, str, str]:
+
+def get_active_window_info(dt: datetime = None) -> tuple[bool, str, str]:
     """
     Returns (is_active, current_time_formatted, status_message)
     """

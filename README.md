@@ -83,6 +83,7 @@ WEB_PORT=8080
 All commands are run using `main.py`:
 
 ### Start Daemon & Web Dashboard
+
 Starts the background daemon (checking the Mon-Fri 7:45 AM - 8:50 AM ET schedule) and launches the Web Dashboard at **`http://localhost:8080`**:
 
 ```bash
@@ -90,11 +91,13 @@ python main.py run
 ```
 
 > **Tip**: To test WebSocket streaming outside of active school bus hours, pass `--ignore-schedule`:
+>
 > ```bash
 > python main.py run --ignore-schedule
 > ```
 
 ### Start Web Server Standalone
+
 Runs only the web dashboard HTTP server:
 
 ```bash
@@ -105,11 +108,40 @@ python main.py web --port 8080
 
 ## Automated Test Suite
 
-Run the full pytest suite (15 unit and integration tests):
+Run the full pytest suite (17 unit and integration tests):
 
 ```bash
 pytest -v tests/
 ```
+
+---
+
+## Code Quality & Pre-Commit Hooks
+
+This project uses **`pre-commit`**, **`ruff`**, and **`prettier`** to enforce opinionated code quality, formatting, and git hygiene across all file types (Python, HTML, CSS, JavaScript, JSON, YAML, Markdown).
+
+### 1. Install Pre-Commit Hooks
+
+Enable pre-commit hooks in your local git repository:
+
+```bash
+pip install -e ".[dev]"
+pre-commit install
+```
+
+### 2. Run Pre-Commit Checks Manually
+
+To run formatting and linting checks manually across all codebase files:
+
+```bash
+pre-commit run --all-files
+```
+
+### 3. Configured Linters & Formatters
+
+- **Python (`.py`)**: [Ruff](https://github.com/astral-sh/ruff) for fast, opinionated linting (`pycodestyle`, `Pyflakes`, `flake8-bugbear`, `isort`, `pyupgrade`) and formatting.
+- **Web & Config (`.js`, `.css`, `.html`, `.json`, `.yml`, `.md`)**: [Prettier](https://prettier.io/) for opinionated code formatting.
+- **Git Hygiene**: `pre-commit-hooks` (trailing whitespace, end-of-file newlines, YAML/JSON validation, large file checks, and merge conflict protection).
 
 ---
 

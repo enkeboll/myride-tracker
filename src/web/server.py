@@ -1,13 +1,22 @@
-import os
 import logging
+import os
+
 from aiohttp import web
-from sqlalchemy import select, func
+from sqlalchemy import func, select
+
 from lib.config import settings
-from lib.scheduler import get_active_window_info, is_bus_active_time
-from lib.db import AsyncSessionLocal, get_recent_bus_locations, get_route_dates, get_route_by_date, get_or_create_daily_route
+from lib.db import (
+    AsyncSessionLocal,
+    get_or_create_daily_route,
+    get_recent_bus_locations,
+    get_route_dates,
+    get_static_locations,
+)
 from lib.models import BusLocation, StudentRecord
+from lib.scheduler import get_active_window_info
 
 logger = logging.getLogger("myride.web")
+
 
 async def handle_index(request):
     static_dir = os.path.join(os.path.dirname(__file__), "static")
@@ -15,6 +24,13 @@ async def handle_index(request):
     if os.path.exists(index_file):
         return web.FileResponse(index_file)
     return web.Response(text="MyRide K12 Tracker Web Server is Running.")
+
+
+async def handle_api_student_locations(request):
+    async with AsyncSessionLocal() as session:
+        locs = await get_static_locations(session)
+    return web.json_response(locs)
+
 
 async def handle_api_status(request):
     is_active, time_str, msg = get_active_window_info()
@@ -64,6 +80,7 @@ async def handle_api_status(request):
     }
     return web.json_response(payload)
 
+
 async def handle_api_locations(request):
     try:
         limit = int(request.query.get("limit", 100))
@@ -89,6 +106,7 @@ async def handle_api_locations(request):
     ]
     return web.json_response(items)
 
+
 async def handle_api_stats(request):
     async with AsyncSessionLocal() as session:
         count_stmt = select(func.count(BusLocation.id))
@@ -103,16 +121,20 @@ async def handle_api_stats(request):
         avg_speed_res = await session.execute(avg_speed_stmt)
         avg_speed = round(avg_speed_res.scalar() or 0.0, 1)
 
-    return web.json_response({
-        "total_points": total_points,
-        "max_speed": max_speed,
-        "avg_speed": avg_speed,
-    })
+    return web.json_response(
+        {
+            "total_points": total_points,
+            "max_speed": max_speed,
+            "avg_speed": avg_speed,
+        }
+    )
+
 
 async def handle_api_route_dates(request):
     async with AsyncSessionLocal() as session:
         dates = await get_route_dates(session)
     return web.json_response(dates)
+
 
 async def handle_api_route_by_date(request):
     date_str = request.query.get("date")
@@ -122,8 +144,10 @@ async def handle_api_route_by_date(request):
             if dates:
                 date_str = dates[0]
             else:
-                return web.json_response({"date": None, "total_points": 0, "distance_miles": 0.0, "vector_coords": [], "locations": []})
-        
+                return web.json_response(
+                    {"date": None, "total_points": 0, "distance_miles": 0.0, "vector_coords": [], "locations": []}
+                )
+
         route_data = await get_or_create_daily_route(session, date_str)
 
     items = [
@@ -139,13 +163,16 @@ async def handle_api_route_by_date(request):
         }
         for r in route_data.get("locations", [])
     ]
-    return web.json_response({
-        "date": date_str,
-        "total_points": len(items),
-        "distance_miles": route_data.get("distance_miles", 0.0),
-        "vector_coords": route_data.get("vector_coords", []),
-        "locations": items
-    })
+    return web.json_response(
+        {
+            "date": date_str,
+            "total_points": len(items),
+            "distance_miles": route_data.get("distance_miles", 0.0),
+            "vector_coords": route_data.get("vector_coords", []),
+            "locations": items,
+        }
+    )
+
 
 def create_web_app():
     app = web.Application()
@@ -158,9 +185,11 @@ def create_web_app():
     app.router.add_get("/api/stats", handle_api_stats)
     app.router.add_get("/api/routes/dates", handle_api_route_dates)
     app.router.add_get("/api/routes/by-date", handle_api_route_by_date)
+    app.router.add_get("/api/student/locations", handle_api_student_locations)
     app.router.add_static("/static/", static_dir, name="static")
 
     return app
+
 
 async def start_web_server(host: str = None, port: int = None):
     host = host or settings.web_host

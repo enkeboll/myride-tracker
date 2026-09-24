@@ -1,12 +1,15 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
 import aiohttp
+import pytest
+
 from lib.api_client import MyRideAPIClient
+
 
 @pytest.mark.asyncio
 async def test_get_user_info(user_info_fixture):
     client = MyRideAPIClient()
-    
+
     mock_resp = AsyncMock()
     mock_resp.status = 200
     mock_resp.json.return_value = user_info_fixture
@@ -17,6 +20,7 @@ async def test_get_user_info(user_info_fixture):
     data = await client.get_user_info("fake_token", session=mock_session)
     assert data["userGuid"] == "b402f215-7cfa-44bb-a140-2eed977cf264"
     assert data["groups"][0]["groupGuid"] == "9de7762a-ef18-45d7-a9a4-d3acc86501d1"
+
 
 @pytest.mark.asyncio
 async def test_get_student_info(student_info_fixture):
@@ -33,6 +37,7 @@ async def test_get_student_info(student_info_fixture):
     assert len(data) == 1
     assert data[0]["firstName"] == "SOREN"
     assert data[0]["runInfo"][0]["assetUniqueId"] == "53"
+
 
 @pytest.mark.asyncio
 async def test_negotiate_signalr(negotiate_fixture):

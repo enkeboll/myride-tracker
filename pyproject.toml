@@ -22,9 +22,31 @@ dependencies = [
 dev = [
     "pytest>=7.4.0",
     "pytest-asyncio>=0.23.0",
+    "pre-commit>=3.6.0",
+    "ruff>=0.2.0",
 ]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 pythonpath = ["src"]
 testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # Pyflakes
+    "I",   # isort import sorting
+    "W",   # pycodestyle warnings
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+]
+ignore = ["E501", "E402"] # Line length handled by formatter, sys.path inserts before imports
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
