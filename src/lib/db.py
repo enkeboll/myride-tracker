@@ -97,6 +97,9 @@ async def get_route_dates(session: AsyncSession):
         dates = [d for d in result_rec.scalars().all() if d]
     return sorted(list(set(dates)), reverse=True)
 
+from .models import Base, BusLocation, StudentRecord, DailyRoute
+from .osrm import match_route_osrm, calculate_coords_distance_miles
+
 async def get_route_by_date(session: AsyncSession, date_str: str):
     stmt = select(BusLocation).where(
         (func.substr(BusLocation.log_time, 1, 10) == date_str) |
@@ -104,3 +107,45 @@ async def get_route_by_date(session: AsyncSession, date_str: str):
     ).order_by(BusLocation.id.asc())
     result = await session.execute(stmt)
     return result.scalars().all()
+
+async def get_or_create_daily_route(session: AsyncSession, date_str: str):
+    raw_records = await get_route_by_date(session, date_str)
+    if not raw_records:
+        return {"date": date_str, "vector_coords": [], "distance_miles": 0.0, "locations": []}
+
+    stmt = select(DailyRoute).where(DailyRoute.date == date_str)
+    res = await session.execute(stmt)
+    cached_route = res.scalar_one_or_none()
+
+    if cached_route:
+        try:
+            vector_coords = json.loads(cached_route.route_geojson)
+            return {
+                "date": date_str,
+                "vector_coords": vector_coords,
+                "distance_miles": cached_route.distance_miles,
+                "locations": raw_records
+            }
+        except Exception:
+            pass
+
+    raw_coords = [(r.longitude, r.latitude) for r in raw_records if r.latitude and r.longitude]
+    matched = await match_route_osrm(raw_coords)
+    vector_coords = [list(pt) for pt in matched]
+    distance_miles = calculate_coords_distance_miles(vector_coords)
+
+    new_route = DailyRoute(
+        date=date_str,
+        route_geojson=json.dumps(vector_coords),
+        distance_miles=distance_miles,
+        point_count=len(vector_coords)
+    )
+    await session.merge(new_route)
+    await session.commit()
+
+    return {
+        "date": date_str,
+        "vector_coords": vector_coords,
+        "distance_miles": distance_miles,
+        "locations": raw_records
+    }

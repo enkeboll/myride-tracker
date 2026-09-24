@@ -13,8 +13,12 @@
     <!-- MapLibre GL CSS for Carto Vector Basemaps -->
     <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" crossorigin="" />
     
+    <!-- Flatpickr CSS for Calendar Date Selector -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css">
+    
     <!-- Custom Styles -->
-    <link rel="stylesheet" href="/static/style.css?v=v6_bus_heading">
+    <link rel="stylesheet" href="/static/style.css?v=v8_flatpickr">
 </head>
 <body>
     <div class="app-container">
@@ -110,9 +114,21 @@
                         <span class="badge-tag" id="routeModeTag">Live View</span>
                     </div>
                     <div class="map-controls">
-                        <select id="routeDateSelect" class="select-sm">
-                            <option value="live">Live / Recent Stream</option>
-                        </select>
+                        <!-- Date Navigator Group -->
+                        <div class="date-navigator">
+                            <button class="btn btn-sm btn-icon" id="btnPrevDay" title="Previous Day with Data">
+                                ◀
+                            </button>
+                            <div class="date-input-wrapper">
+                                <input type="text" id="routeDatePicker" class="date-input" placeholder="Select Date..." readonly title="Select Route Date">
+                            </div>
+                            <button class="btn btn-sm btn-icon" id="btnNextDay" title="Next Day with Data">
+                                ▶
+                            </button>
+                        </div>
+                        <button class="btn btn-sm btn-live active" id="btnLiveToggle">
+                            <span class="live-dot"></span> Live
+                        </button>
                         <button class="btn btn-sm" id="btnRecenter">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <circle cx="12" cy="12" r="10"></circle>
@@ -193,7 +209,9 @@
 
     <!-- MapLibre GL JS -->
     <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js" crossorigin=""></script>
+    <!-- Flatpickr JS for Calendar Selector -->
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <!-- App Script -->
-    <script src="/static/app.js?v=v6_bus_heading"></script>
+    <script src="/static/app.js?v=v8_flatpickr"></script>
 </body>
 </html>

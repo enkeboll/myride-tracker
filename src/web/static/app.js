@@ -1,4 +1,4 @@
-// MyRide K12 Front-End Application Logic with Interactive Time Gradient Scrubber Timeline
+// MyRide K12 Front-End Application Logic with Interactive Time Scrubber & Calendar Navigation
 
 let map = null;
 let busMarker = null;
@@ -9,6 +9,7 @@ let isMapLoaded = false;
 let selectedRouteDate = 'live'; // 'live' or 'YYYY-MM-DD'
 
 let currentRouteLocations = [];
+let availableDates = []; // Sorted ascending 'YYYY-MM-DD'
 let isPinned = false;
 let pinnedIndex = -1;
 
@@ -42,33 +43,39 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    const routeSelect = document.getElementById('routeDateSelect');
-    routeSelect.addEventListener('change', (e) => {
-        selectedRouteDate = e.target.value;
-        const modeTag = document.getElementById('routeModeTag');
-        unpinTimeline();
+    // Calendar Datepicker & Navigation Listeners
+    const datePicker = document.getElementById('routeDatePicker');
+    const btnPrevDay = document.getElementById('btnPrevDay');
+    const btnNextDay = document.getElementById('btnNextDay');
+    const btnLiveToggle = document.getElementById('btnLiveToggle');
 
-        if (selectedRouteDate === 'live') {
-            modeTag.textContent = 'Live View';
-            modeTag.className = 'badge-tag';
-            fetchHistory();
-        } else {
-            modeTag.textContent = `Route: ${selectedRouteDate}`;
-            modeTag.className = 'badge-tag active-route';
-            loadRouteForDate(selectedRouteDate);
+    datePicker.addEventListener('change', (e) => {
+        const val = e.target.value;
+        if (val) {
+            selectRouteDate(val);
         }
     });
 
-    routeSelect.addEventListener('focus', fetchRouteDates);
+    btnPrevDay.addEventListener('click', () => {
+        jumpToAdjacentDate(-1);
+    });
+
+    btnNextDay.addEventListener('click', () => {
+        jumpToAdjacentDate(1);
+    });
+
+    btnLiveToggle.addEventListener('click', () => {
+        switchToLiveView();
+    });
 
     // Setup Interactive Time Gradient Scrubber Controls
     setupInteractiveTimeline();
 });
 
 function initMap() {
-    // Default coords: Ardsley / Dobbs Ferry NY area from HAR capture
-    const defaultLat = 41.0188408;
-    const defaultLon = -73.8418884;
+    // Default center & zoom encompassing typical bus route area (from 2026-09-16 analysis)
+    const defaultLat = 41.002254;
+    const defaultLon = -73.848740;
 
     // CARTO Vector Basemap Dark Matter style
     const vectorStyleUrl = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
@@ -77,7 +84,7 @@ function initMap() {
         container: 'map',
         style: vectorStyleUrl,
         center: [defaultLon, defaultLat], // MapLibre uses [lng, lat]
-        zoom: 14,
+        zoom: 13, // Fits the ~3.5mi x 2.2mi route area perfectly
         attributionControl: false
     });
 
@@ -196,6 +203,161 @@ function initMap() {
             loadRouteForDate(selectedRouteDate);
         }
     });
+}
+
+let fpInstance = null;
+
+async function fetchRouteDates() {
+    try {
+        const resp = await fetch('/api/routes/dates');
+        if (!resp.ok) return;
+        const dates = await resp.json();
+
+        // Store sorted ascending ('2026-09-14' ... '2026-09-23')
+        availableDates = dates.sort();
+
+        initDatePicker();
+        updateDateNavButtons();
+    } catch (err) {
+        console.warn('Error fetching route dates:', err);
+    }
+}
+
+function initDatePicker() {
+    if (typeof flatpickr === 'undefined') return;
+
+    if (fpInstance) {
+        fpInstance.destroy();
+    }
+
+    fpInstance = flatpickr("#routeDatePicker", {
+        theme: "dark",
+        dateFormat: "Y-m-d",
+        enable: availableDates, // Greys out & disables dates without data
+        onChange: function(selectedDates, dateStr) {
+            if (dateStr) {
+                selectRouteDate(dateStr);
+            }
+        },
+        onDayCreate: function(dObj, dStr, fp, dayElem) {
+            const dateObj = dayElem.dateObj;
+            const year = dateObj.getFullYear();
+            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const day = String(dateObj.getDate()).padStart(2, '0');
+            const formatted = `${year}-${month}-${day}`;
+
+            if (availableDates.includes(formatted)) {
+                dayElem.classList.add('has-data-day');
+                const dot = document.createElement('span');
+                dot.className = 'data-dot';
+                dayElem.appendChild(dot);
+            }
+        }
+    });
+}
+
+function selectRouteDate(dateStr) {
+    selectedRouteDate = dateStr;
+    unpinTimeline();
+
+    const modeTag = document.getElementById('routeModeTag');
+    const btnLive = document.getElementById('btnLiveToggle');
+
+    if (fpInstance && dateStr !== 'live') {
+        fpInstance.setDate(dateStr, false);
+    }
+
+    btnLive.className = 'btn btn-sm btn-live'; // Deactivate live
+
+    if (availableDates.includes(dateStr)) {
+        modeTag.textContent = `Route: ${dateStr}`;
+        modeTag.className = 'badge-tag active-route';
+        loadRouteForDate(dateStr);
+    } else {
+        modeTag.textContent = `No Data: ${dateStr}`;
+        modeTag.className = 'badge-tag standby';
+        renderHistoryTable([]);
+        renderRoutePolyline(null, [], 0.0, false);
+    }
+
+    updateDateNavButtons();
+}
+
+function switchToLiveView() {
+    selectedRouteDate = 'live';
+    unpinTimeline();
+
+    const modeTag = document.getElementById('routeModeTag');
+    const btnLive = document.getElementById('btnLiveToggle');
+
+    if (fpInstance) {
+        fpInstance.clear();
+    }
+
+    btnLive.className = 'btn btn-sm btn-live active';
+    modeTag.textContent = 'Live View';
+    modeTag.className = 'badge-tag';
+
+    updateDateNavButtons();
+    fetchHistory();
+}
+
+function jumpToAdjacentDate(direction) {
+    if (availableDates.length === 0) return;
+
+    if (selectedRouteDate === 'live') {
+        // If in live view and clicking prev (-1), jump to latest available date
+        if (direction < 0) {
+            selectRouteDate(availableDates[availableDates.length - 1]);
+        }
+        return;
+    }
+
+    const idx = availableDates.indexOf(selectedRouteDate);
+    if (direction < 0) {
+        // Find largest date < selectedRouteDate
+        let prevDate = null;
+        for (let i = availableDates.length - 1; i >= 0; i--) {
+            if (availableDates[i] < selectedRouteDate) {
+                prevDate = availableDates[i];
+                break;
+            }
+        }
+        if (prevDate) selectRouteDate(prevDate);
+    } else if (direction > 0) {
+        // Find smallest date > selectedRouteDate
+        let nextDate = null;
+        for (let i = 0; i < availableDates.length; i++) {
+            if (availableDates[i] > selectedRouteDate) {
+                nextDate = availableDates[i];
+                break;
+            }
+        }
+        if (nextDate) selectRouteDate(nextDate);
+    }
+}
+
+function updateDateNavButtons() {
+    const btnPrev = document.getElementById('btnPrevDay');
+    const btnNext = document.getElementById('btnNextDay');
+
+    if (availableDates.length === 0) {
+        btnPrev.disabled = true;
+        btnNext.disabled = true;
+        return;
+    }
+
+    if (selectedRouteDate === 'live') {
+        btnPrev.disabled = false; // Prev jumps to latest date with data
+        btnNext.disabled = true;  // In live view, no "next" date
+        return;
+    }
+
+    const hasPrev = availableDates.some(d => d < selectedRouteDate);
+    const hasNext = availableDates.some(d => d > selectedRouteDate);
+
+    btnPrev.disabled = !hasPrev;
+    btnNext.disabled = !hasNext;
 }
 
 function setupInteractiveTimeline() {
@@ -321,31 +483,6 @@ function recenterMap() {
     }
 }
 
-async function fetchRouteDates() {
-    try {
-        const resp = await fetch('/api/routes/dates');
-        if (!resp.ok) return;
-        const dates = await resp.json();
-
-        const select = document.getElementById('routeDateSelect');
-        const currentVal = select.value;
-        select.innerHTML = '<option value="live">Live / Recent Stream</option>';
-
-        dates.forEach(d => {
-            const opt = document.createElement('option');
-            opt.value = d;
-            opt.textContent = `Route: ${d}`;
-            select.appendChild(opt);
-        });
-
-        if (currentVal && Array.from(select.options).some(o => o.value === currentVal)) {
-            select.value = currentVal;
-        }
-    } catch (err) {
-        console.warn('Error fetching route dates:', err);
-    }
-}
-
 async function fetchStatus() {
     try {
         const resp = await fetch('/api/status');
@@ -442,7 +579,7 @@ async function fetchHistory() {
         const locations = await resp.json();
 
         renderHistoryTable(locations);
-        renderRoutePolyline(locations, true);
+        renderRoutePolyline(null, locations, 0.0, true);
     } catch (err) {
         console.warn('Error fetching history:', err);
     }
@@ -455,7 +592,7 @@ async function loadRouteForDate(dateStr) {
         const routeData = await resp.json();
 
         renderHistoryTable(routeData.locations);
-        renderRoutePolyline(routeData.locations, false);
+        renderRoutePolyline(routeData.vector_coords, routeData.locations, routeData.distance_miles, false);
     } catch (err) {
         console.warn(`Error loading route for ${dateStr}:`, err);
     }
@@ -486,10 +623,14 @@ function renderHistoryTable(locations) {
     }).join('');
 }
 
-function renderRoutePolyline(locations, isLive) {
+function renderRoutePolyline(vectorCoords, locations, serverDistanceMiles, isLive) {
     if (!map || !isMapLoaded) return;
 
-    if (!locations || locations.length === 0) {
+    let coordinates = (vectorCoords && vectorCoords.length > 0)
+        ? vectorCoords
+        : (locations || []).filter(r => r.latitude && r.longitude).map(r => [r.longitude, r.latitude]);
+
+    if (!coordinates || coordinates.length === 0) {
         currentRouteLocations = [];
         const routeSource = map.getSource('route');
         if (routeSource) {
@@ -504,25 +645,26 @@ function renderRoutePolyline(locations, isLive) {
         return;
     }
 
-    // Sort locations in chronological ascending order
-    const chronoLocations = [...locations].sort((a, b) => {
+    // Sort location records chronologically for status/timeline scrubbing
+    const chronoLocations = [...(locations || [])].sort((a, b) => {
         const timeA = new Date(a.log_time || a.received_at || 0);
         const timeB = new Date(b.log_time || b.received_at || 0);
         return timeA - timeB;
     });
 
-    currentRouteLocations = chronoLocations;
+    currentRouteLocations = chronoLocations.length > 0 ? chronoLocations : coordinates.map((c, i) => ({
+        latitude: c[1],
+        longitude: c[0],
+        speed: 0,
+        heading: 0,
+        log_time: null
+    }));
+
     if (!isPinned) {
         unpinTimeline();
     }
 
-    const coordinates = chronoLocations
-        .filter(r => r.latitude && r.longitude)
-        .map(r => [r.longitude, r.latitude]);
-
-    if (coordinates.length === 0) return;
-
-    // Update GeoJSON route line source
+    // Update GeoJSON route line source with street-snapped vector geometry
     const routeSource = map.getSource('route');
     if (routeSource) {
         routeSource.setData({
@@ -550,9 +692,9 @@ function renderRoutePolyline(locations, isLive) {
     }
 
     // Calculate total distance & time range
-    const distanceMiles = calculateRouteDistanceMiles(coordinates);
-    const startTimeStr = formatShortTimeStr(chronoLocations[0].log_time || chronoLocations[0].received_at);
-    const endTimeStr = formatShortTimeStr(chronoLocations[chronoLocations.length - 1].log_time || chronoLocations[chronoLocations.length - 1].received_at);
+    const distanceMiles = serverDistanceMiles || calculateRouteDistanceMiles(coordinates);
+    const startTimeStr = chronoLocations.length > 0 ? formatShortTimeStr(chronoLocations[0].log_time || chronoLocations[0].received_at) : '--:--';
+    const endTimeStr = chronoLocations.length > 0 ? formatShortTimeStr(chronoLocations[chronoLocations.length - 1].log_time || chronoLocations[chronoLocations.length - 1].received_at) : '--:--';
 
     updateSummaryBar(chronoLocations.length, distanceMiles, startTimeStr, endTimeStr);
 
@@ -569,7 +711,7 @@ function renderRoutePolyline(locations, isLive) {
         updateMapPosition(lastLoc);
     }
 
-    // Set Waypoint Start/End Markers
+    // Set Waypoint Start/End Markers ONLY
     clearWaypointMarkers();
 
     if (coordinates.length > 1) {

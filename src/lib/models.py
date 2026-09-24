@@ -37,3 +37,12 @@ class StudentRecord(Base):
     active_vehicle: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     tenant_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+class DailyRoute(Base):
+    __tablename__ = "daily_routes"
+
+    date: Mapped[str] = mapped_column(String(20), primary_key=True)
+    route_geojson: Mapped[str] = mapped_column(Text)
+    distance_miles: Mapped[float] = mapped_column(Float, default=0.0)
+    point_count: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))

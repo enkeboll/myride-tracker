@@ -4,7 +4,7 @@ from aiohttp import web
 from sqlalchemy import select, func
 from lib.config import settings
 from lib.scheduler import get_active_window_info, is_bus_active_time
-from lib.db import AsyncSessionLocal, get_recent_bus_locations, get_route_dates, get_route_by_date
+from lib.db import AsyncSessionLocal, get_recent_bus_locations, get_route_dates, get_route_by_date, get_or_create_daily_route
 from lib.models import BusLocation, StudentRecord
 
 logger = logging.getLogger("myride.web")
@@ -122,9 +122,9 @@ async def handle_api_route_by_date(request):
             if dates:
                 date_str = dates[0]
             else:
-                return web.json_response({"date": None, "total_points": 0, "locations": []})
+                return web.json_response({"date": None, "total_points": 0, "distance_miles": 0.0, "vector_coords": [], "locations": []})
         
-        records = await get_route_by_date(session, date_str)
+        route_data = await get_or_create_daily_route(session, date_str)
 
     items = [
         {
@@ -137,11 +137,13 @@ async def handle_api_route_by_date(request):
             "log_time": r.log_time,
             "received_at": r.received_at.isoformat() if r.received_at else None,
         }
-        for r in records
+        for r in route_data.get("locations", [])
     ]
     return web.json_response({
         "date": date_str,
         "total_points": len(items),
+        "distance_miles": route_data.get("distance_miles", 0.0),
+        "vector_coords": route_data.get("vector_coords", []),
         "locations": items
     })
 
