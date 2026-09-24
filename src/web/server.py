@@ -8,7 +8,7 @@ from lib.config import settings
 from lib.db import (
     AsyncSessionLocal,
     get_or_create_daily_route,
-    get_recent_bus_locations,
+    get_paginated_bus_locations,
     get_route_dates,
     get_static_locations,
 )
@@ -83,13 +83,34 @@ async def handle_api_status(request):
 
 async def handle_api_locations(request):
     try:
-        limit = int(request.query.get("limit", 100))
-        limit = min(max(1, limit), 1000)
+        page = int(request.query.get("page", 1))
+        page = max(1, page)
     except ValueError:
-        limit = 100
+        page = 1
+
+    try:
+        limit = int(request.query.get("limit", 20))
+        limit = min(max(1, limit), 500)
+    except ValueError:
+        limit = 20
+
+    search = request.query.get("search") or request.query.get("bus_number")
+    date_str = request.query.get("date")
+
+    try:
+        min_speed = float(request.query.get("min_speed", 0))
+    except ValueError:
+        min_speed = 0.0
 
     async with AsyncSessionLocal() as session:
-        records = await get_recent_bus_locations(session, limit=limit)
+        result = await get_paginated_bus_locations(
+            session,
+            page=page,
+            limit=limit,
+            search=search,
+            min_speed=min_speed,
+            date_str=date_str,
+        )
 
     items = [
         {
@@ -102,9 +123,18 @@ async def handle_api_locations(request):
             "log_time": r.log_time,
             "received_at": r.received_at.isoformat() if r.received_at else None,
         }
-        for r in records
+        for r in result["items"]
     ]
-    return web.json_response(items)
+
+    return web.json_response(
+        {
+            "items": items,
+            "total_count": result["total_count"],
+            "page": result["page"],
+            "limit": result["limit"],
+            "total_pages": result["total_pages"],
+        }
+    )
 
 
 async def handle_api_stats(request):

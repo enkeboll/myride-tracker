@@ -212,6 +212,52 @@ async def get_static_locations(session: AsyncSession) -> list:
     return locations
 
 
+async def get_paginated_bus_locations(
+    session: AsyncSession,
+    page: int = 1,
+    limit: int = 20,
+    search: str | None = None,
+    min_speed: float | None = None,
+    date_str: str | None = None,
+) -> dict:
+    filters = []
+
+    if search:
+        search_pattern = f"%{search.strip()}%"
+        filters.append(BusLocation.asset_unique_id.like(search_pattern) | BusLocation.log_time.like(search_pattern))
+
+    if min_speed is not None and min_speed > 0:
+        filters.append(BusLocation.speed >= min_speed)
+
+    if date_str:
+        filters.append(
+            (func.substr(BusLocation.log_time, 1, 10) == date_str)
+            | (func.strftime("%Y-%m-%d", BusLocation.received_at) == date_str)
+        )
+
+    count_stmt = select(func.count(BusLocation.id))
+    if filters:
+        count_stmt = count_stmt.where(*filters)
+    total_count = (await session.execute(count_stmt)).scalar() or 0
+
+    offset = (page - 1) * limit
+    data_stmt = select(BusLocation).order_by(BusLocation.id.desc())
+    if filters:
+        data_stmt = data_stmt.where(*filters)
+    data_stmt = data_stmt.offset(offset).limit(limit)
+
+    records = (await session.execute(data_stmt)).scalars().all()
+    total_pages = max(1, (total_count + limit - 1) // limit) if limit > 0 else 1
+
+    return {
+        "items": records,
+        "total_count": total_count,
+        "page": page,
+        "limit": limit,
+        "total_pages": total_pages,
+    }
+
+
 async def get_recent_bus_locations(session: AsyncSession, limit: int = 50):
     stmt = select(BusLocation).order_by(BusLocation.id.desc()).limit(limit)
     result = await session.execute(stmt)

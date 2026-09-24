@@ -24,11 +24,16 @@ async def test_web_app_index_and_api():
         assert "is_active_window" in data_status
         assert "status_message" in data_status
 
-        # Test API locations endpoint
+        # Test API locations endpoint (with pagination & filtering)
         resp_locs = await client.get("/api/locations?limit=10")
         assert resp_locs.status == 200
         data_locs = await resp_locs.json()
-        assert isinstance(data_locs, list)
+        assert isinstance(data_locs, dict)
+        assert "items" in data_locs
+        assert "total_count" in data_locs
+        assert "page" in data_locs
+        assert "total_pages" in data_locs
+        assert isinstance(data_locs["items"], list)
 
         # Test API stats endpoint
         resp_stats = await client.get("/api/stats")

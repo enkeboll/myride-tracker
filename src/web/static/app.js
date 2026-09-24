@@ -8,26 +8,102 @@ let latestCoords = null;
 let isMapLoaded = false;
 let selectedRouteDate = 'live'; // 'live' or 'YYYY-MM-DD'
 
-let currentRouteLocations = [];
-let availableDates = []; // Sorted ascending 'YYYY-MM-DD'
-let isPinned = false;
-let pinnedIndex = -1;
+let isDebugMode = false;
+let historyCurrentPage = 1;
+let historyTotalPages = 1;
+let historyTotalCount = 0;
+let historyPageSize = 20;
+let historySearchQuery = '';
+let historyMinSpeed = 0;
 
 let staticMarkers = [];
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Check for debug mode flag in URL query parameters (?debug=true or ?debug=1)
+  const urlParams = new URLSearchParams(window.location.search);
+  const debugVal = urlParams.get('debug');
+  isDebugMode = debugVal === 'true' || debugVal === '1' || urlParams.has('debug');
+
+  const historyCard = document.getElementById('historyCard');
+  const mainLayout = document.querySelector('.main-layout');
+
+  if (isDebugMode) {
+    if (historyCard) historyCard.classList.remove('hidden');
+    if (mainLayout) mainLayout.classList.remove('full-width-map');
+  } else {
+    if (historyCard) historyCard.classList.add('hidden');
+    if (mainLayout) mainLayout.classList.add('full-width-map');
+  }
+
   initMap();
   fetchRouteDates();
   fetchStatus();
-  fetchHistory();
+  if (isDebugMode) {
+    fetchHistory(1);
+  }
   fetchStats();
   fetchStaticLocations();
+
+  // History Filtering & Pagination Event Listeners
+  const searchInput = document.getElementById('historySearchInput');
+  const speedFilter = document.getElementById('historySpeedFilter');
+  const pageSizeSelect = document.getElementById('historyPageSizeSelect');
+  const btnPrev = document.getElementById('historyBtnPrev');
+  const btnNext = document.getElementById('historyBtnNext');
+
+  if (searchInput) {
+    let debounceTimer = null;
+    searchInput.addEventListener('input', (e) => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        historySearchQuery = e.target.value.trim();
+        historyCurrentPage = 1;
+        fetchHistory(1);
+      }, 300);
+    });
+  }
+
+  if (speedFilter) {
+    speedFilter.addEventListener('change', (e) => {
+      historyMinSpeed = parseFloat(e.target.value) || 0;
+      historyCurrentPage = 1;
+      fetchHistory(1);
+    });
+  }
+
+  if (pageSizeSelect) {
+    pageSizeSelect.addEventListener('change', (e) => {
+      historyPageSize = parseInt(e.target.value, 10) || 20;
+      historyCurrentPage = 1;
+      fetchHistory(1);
+    });
+  }
+
+  if (btnPrev) {
+    btnPrev.addEventListener('click', () => {
+      if (historyCurrentPage > 1) {
+        historyCurrentPage--;
+        fetchHistory(historyCurrentPage);
+      }
+    });
+  }
+
+  if (btnNext) {
+    btnNext.addEventListener('click', () => {
+      if (historyCurrentPage < historyTotalPages) {
+        historyCurrentPage++;
+        fetchHistory(historyCurrentPage);
+      }
+    });
+  }
 
   // Auto refresh every 3 seconds for live streaming feel
   setInterval(() => {
     if (selectedRouteDate === 'live' && !isPinned) {
       fetchStatus();
-      fetchHistory();
+      if (isDebugMode) {
+        fetchHistory(historyCurrentPage);
+      }
       fetchStats();
     }
   }, 3000);
@@ -647,16 +723,48 @@ function updateMapPosition(loc) {
   }
 }
 
-async function fetchHistory() {
-  try {
-    const resp = await fetch('/api/locations?limit=100');
-    if (!resp.ok) return;
-    const locations = await resp.json();
+async function fetchHistory(page = historyCurrentPage) {
+  if (!isDebugMode) return;
 
-    renderHistoryTable(locations);
-    renderRoutePolyline(null, locations, 0.0, true);
+  try {
+    const url = `/api/locations?page=${page}&limit=${historyPageSize}&search=${encodeURIComponent(
+      historySearchQuery
+    )}&min_speed=${historyMinSpeed}`;
+    const resp = await fetch(url);
+    if (!resp.ok) return;
+    const data = await resp.json();
+
+    const items = data.items || data;
+    historyCurrentPage = data.page || page;
+    historyTotalPages = data.total_pages || 1;
+    historyTotalCount = data.total_count !== undefined ? data.total_count : items.length;
+
+    renderHistoryTable(items);
+    updateHistoryPaginationUI();
+
+    if (selectedRouteDate === 'live') {
+      renderRoutePolyline(null, items, 0.0, true);
+    }
   } catch (err) {
     console.warn('Error fetching history:', err);
+  }
+}
+
+function updateHistoryPaginationUI() {
+  const infoEl = document.getElementById('historyPaginationInfo');
+  const btnPrev = document.getElementById('historyBtnPrev');
+  const btnNext = document.getElementById('historyBtnNext');
+
+  if (infoEl) {
+    infoEl.textContent = `Page ${historyCurrentPage} of ${historyTotalPages} (${historyTotalCount} items)`;
+  }
+
+  if (btnPrev) {
+    btnPrev.disabled = historyCurrentPage <= 1;
+  }
+
+  if (btnNext) {
+    btnNext.disabled = historyCurrentPage >= historyTotalPages;
   }
 }
 

@@ -801,3 +801,81 @@ body {
   align-items: center;
   gap: 4px;
 }
+
+/* Layout & Debug History Card Visibility */
+.main-layout.full-width-map {
+  grid-template-columns: 1fr !important;
+}
+
+.history-card.hidden {
+  display: none !important;
+}
+
+.debug-tag {
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: rgba(245, 158, 11, 0.2);
+  color: var(--accent-amber);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+/* History Filter Bar */
+.history-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.filter-input {
+  flex: 1;
+  background: rgba(17, 24, 39, 0.8);
+  border: 1px solid var(--border-card);
+  color: var(--text-primary);
+  font-family: var(--font-main);
+  font-size: 0.8rem;
+  padding: 6px 12px;
+  border-radius: 8px;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.filter-input:focus {
+  border-color: var(--accent-blue);
+}
+
+.filter-select {
+  background: rgba(17, 24, 39, 0.8);
+  border: 1px solid var(--border-card);
+  color: var(--text-primary);
+  font-family: var(--font-main);
+  font-size: 0.8rem;
+  padding: 6px 10px;
+  border-radius: 8px;
+  outline: none;
+  cursor: pointer;
+}
+
+/* History Pagination Bar */
+.history-pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-card);
+}
+
+.pagination-info {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  font-family: var(--font-main);
+}
+
+.page-size-select {
+  padding: 4px 8px;
+  font-size: 0.75rem;
+}
