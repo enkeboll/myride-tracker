@@ -9,6 +9,9 @@ let isMapLoaded = false;
 let selectedRouteDate = 'live'; // 'live' or 'YYYY-MM-DD'
 
 let isDebugMode = false;
+let isOffHours = false;
+let hasInitializedDefaultDate = false;
+
 let historyCurrentPage = 1;
 let historyTotalPages = 1;
 let historyTotalCount = 0;
@@ -17,6 +20,16 @@ let historySearchQuery = '';
 let historyMinSpeed = 0;
 
 let staticMarkers = [];
+
+function checkAndSetOffHoursDefaultDate() {
+  if (hasInitializedDefaultDate) return;
+
+  if (isOffHours && availableDates.length > 0 && selectedRouteDate === 'live') {
+    hasInitializedDefaultDate = true;
+    const latestDate = availableDates[availableDates.length - 1];
+    selectRouteDate(latestDate);
+  }
+}
 
 document.addEventListener('DOMContentLoaded', () => {
   // Check for debug mode flag in URL query parameters (?debug=true or ?debug=1)
@@ -369,6 +382,8 @@ async function fetchRouteDates() {
 
     initDatePicker();
     updateDateNavButtons();
+
+    checkAndSetOffHoursDefaultDate();
   } catch (err) {
     console.warn('Error fetching route dates:', err);
   }
@@ -640,10 +655,14 @@ async function fetchStatus() {
     if (!resp.ok) return;
     const data = await resp.json();
 
+    isOffHours = !data.is_active_window;
+
     updateStatusBadge(data);
     updateStudentCard(data.student);
 
-    if (data.latest_location && selectedRouteDate === 'live' && !isPinned) {
+    if (isOffHours && !hasInitializedDefaultDate) {
+      checkAndSetOffHoursDefaultDate();
+    } else if (data.latest_location && selectedRouteDate === 'live' && !isPinned) {
       updateLocationCard(data.latest_location);
       updateMapPosition(data.latest_location);
     }
@@ -660,7 +679,7 @@ function updateStatusBadge(data) {
   const windowPill = document.getElementById('windowPill');
 
   const isActive = data.is_active_window;
-  windowPill.querySelector('span').textContent = 'Mon-Fri 7:45 AM - 8:50 AM ET';
+  windowPill.querySelector('span').textContent = 'Mon-Fri 7:45 AM - 9:15 AM ET';
 
   if (isActive) {
     badge.className = 'status-badge';

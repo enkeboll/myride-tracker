@@ -16,7 +16,7 @@ myride-tracker/
 │   │   ├── signalr_client.py # SignalR WebSocket client & \x1e frame protocol
 │   │   ├── models.py         # Async SQLAlchemy 2.0 ORM models
 │   │   ├── db.py             # SQLite WAL database engine & repository helpers
-│   │   └── scheduler.py      # Active bus window scheduler (Mon-Fri 7:45-8:50 AM ET)
+│   │   └── scheduler.py      # Active bus window scheduler (Mon-Fri 7:45-9:15 AM ET)
 │   ├── web/                  # Web server & static front-end assets
 │   │   ├── server.py         # Async aiohttp REST API server & static file router
 │   │   └── static/           # Front-end dashboard (index.html, style.css, app.js)
@@ -34,7 +34,7 @@ myride-tracker/
 ## Features
 
 - **CARTO Vector Basemaps**: Uses MapLibre GL JS and CARTO's official GL style vector tiles (`https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json`) for crisp, high-DPI vector rendering, WebGL performance, and sharp font labels.
-- **Active Bus Window Scheduler**: Monitored automatically during active bus hours (**Monday–Friday, 7:45 AM – 8:50 AM ET**). Outside this window, the service remains in low-power standby while serving historical data.
+- **Active Bus Window Scheduler**: Monitored automatically during active bus hours (**Monday–Friday, 7:45 AM – 9:15 AM ET**). Outside this window, the service remains in low-power standby while serving historical data.
 - **Embedded Web Dashboard**: Modern responsive UI (`http://localhost:8080`) featuring:
   - **Live Status Indicator**: Active (Streaming) vs Standby (Off-Hours) with timezone notice.
   - **Interactive Vector Map**: Built with MapLibre GL JS & CARTO Vector Dark Matter basemap, plotting live bus markers & GeoJSON breadcrumb route trails.

@@ -3,6 +3,7 @@ import os
 from datetime import datetime, timezone
 
 from sqlalchemy import event, func, select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from .config import settings
@@ -54,12 +55,47 @@ async def init_db():
             except Exception:
                 pass
 
+        # Deduplicate existing bus_locations records & enforce unique index on (asset_unique_id, log_time)
+        try:
+            await conn.execute(
+                text("""
+                DELETE FROM bus_locations
+                WHERE id NOT IN (
+                    SELECT MIN(id)
+                    FROM bus_locations
+                    GROUP BY asset_unique_id, log_time
+                );
+            """)
+            )
+            await conn.execute(
+                text("""
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_asset_log_time_unique
+                ON bus_locations (asset_unique_id, log_time);
+            """)
+            )
+        except Exception:
+            pass
 
-async def save_bus_location(session: AsyncSession, data: dict, raw_payload: str) -> BusLocation:
+
+async def save_bus_location(session: AsyncSession, data: dict, raw_payload: str) -> BusLocation | None:
+    asset_unique_id = str(data.get("assetUniqueId", "unknown"))
+    log_time = str(data.get("logTime", ""))
+
+    # Pre-check: skip insert if exact asset_unique_id and log_time already exists
+    if log_time:
+        stmt = (
+            select(BusLocation)
+            .where(BusLocation.asset_unique_id == asset_unique_id, BusLocation.log_time == log_time)
+            .limit(1)
+        )
+        existing = (await session.execute(stmt)).scalar_one_or_none()
+        if existing:
+            return existing
+
     record = BusLocation(
-        asset_unique_id=str(data.get("assetUniqueId", "unknown")),
+        asset_unique_id=asset_unique_id,
         asset_id=data.get("assetId"),
-        log_time=str(data.get("logTime", "")),
+        log_time=log_time,
         latitude=float(data.get("latitude", 0.0)),
         longitude=float(data.get("longitude", 0.0)),
         heading=float(data["heading"]) if data.get("heading") is not None else None,
@@ -70,9 +106,18 @@ async def save_bus_location(session: AsyncSession, data: dict, raw_payload: str)
         raw_payload=raw_payload,
     )
     session.add(record)
-    await session.commit()
-    await session.refresh(record)
-    return record
+    try:
+        await session.commit()
+        await session.refresh(record)
+        return record
+    except IntegrityError:
+        await session.rollback()
+        stmt = (
+            select(BusLocation)
+            .where(BusLocation.asset_unique_id == asset_unique_id, BusLocation.log_time == log_time)
+            .limit(1)
+        )
+        return (await session.execute(stmt)).scalar_one_or_none()
 
 
 async def save_student(session: AsyncSession, data: dict, tenant_id: str = None) -> StudentRecord:

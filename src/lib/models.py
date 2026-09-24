@@ -24,7 +24,7 @@ class BusLocation(Base):
     received_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     raw_payload: Mapped[str] = mapped_column(Text)
 
-    __table_args__ = (Index("idx_asset_log_time", "asset_unique_id", "log_time"),)
+    __table_args__ = (Index("idx_asset_log_time_unique", "asset_unique_id", "log_time", unique=True),)
 
 
 class StudentRecord(Base):
