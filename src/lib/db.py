@@ -1,9 +1,16 @@
+import os
 import json
 from datetime import datetime, timezone
 from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from .config import settings
 from .models import Base, BusLocation, StudentRecord
+
+# Ensure target SQLite directory exists if a file path is specified
+if "sqlite" in settings.db_url:
+    db_path = settings.db_url.split("///")[-1]
+    if db_path and not db_path.startswith(":memory:"):
+        os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
 
 engine = create_async_engine(
     settings.db_url,

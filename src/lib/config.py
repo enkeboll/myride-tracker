@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     api_base_url: str = "https://myridek12.tylerapi.com"
     ws_base_url: str = "wss://myridek12.tylerapi.com"
     
-    db_url: str = "sqlite+aiosqlite:///myride.db"
+    db_url: str = "sqlite+aiosqlite:///data/myride.db"
     log_level: str = "INFO"
     web_host: str = "0.0.0.0"
     web_port: int = 8080
