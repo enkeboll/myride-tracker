@@ -78,31 +78,19 @@ WEB_PORT=8080
 
 ---
 
-## Running the Service
+## Running the Service & Helper Commands (`Makefile`)
 
-All commands are run using `main.py`:
+A [`Makefile`](file:///Users/enkeboll/code/myride/Makefile) is provided for quick execution of common tasks:
 
-### Start Daemon & Web Dashboard
-
-Starts the background daemon (checking the Mon-Fri 7:45 AM - 8:50 AM ET schedule) and launches the Web Dashboard at **`http://localhost:8080`**:
-
-```bash
-python main.py run
-```
-
-> **Tip**: To test WebSocket streaming outside of active school bus hours, pass `--ignore-schedule`:
->
-> ```bash
-> python main.py run --ignore-schedule
-> ```
-
-### Start Web Server Standalone
-
-Runs only the web dashboard HTTP server:
-
-```bash
-python main.py web --port 8080
-```
+| Command        | Description                                                                               |
+| :------------- | :---------------------------------------------------------------------------------------- |
+| `make run`     | Starts the MyRide background daemon and Web Dashboard (`http://localhost:8080`).          |
+| `make web`     | Starts only the Web Dashboard standalone server.                                          |
+| `make test`    | Runs the full automated `pytest` suite (17 tests).                                        |
+| `make lint`    | Runs `ruff check .` and `pre-commit` checks on all codebase files.                        |
+| `make format`  | Formats all codebase files automatically (`ruff format` & `prettier`).                    |
+| `make clean`   | Cleans Python cache directories (`__pycache__`, `.pytest_cache`, `.ruff_cache`, `*.pyc`). |
+| `make install` | Installs dev dependencies (`pip install -e ".[dev]"`) and installs git hooks.             |
 
 ---
 
@@ -111,7 +99,7 @@ python main.py web --port 8080
 Run the full pytest suite (17 unit and integration tests):
 
 ```bash
-pytest -v tests/
+pytest -v tests/   # or make test
 ```
 
 ---
