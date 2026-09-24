@@ -7,5 +7,6 @@ myride.db-wal
 myride.db-shm
 data/
 .pytest_cache/
+*.egg-info/
 *.har
 .DS_Store
