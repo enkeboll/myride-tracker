@@ -1,25 +1,55 @@
-// MyRide K12 Front-End Application Logic with CARTO Vector Basemaps & MapLibre GL
+// MyRide K12 Front-End Application Logic with Time-Based Gradient Route Map
 
 let map = null;
 let busMarker = null;
+let startMarker = null;
+let endMarker = null;
 let latestCoords = null;
 let isMapLoaded = false;
+let selectedRouteDate = 'live'; // 'live' or 'YYYY-MM-DD'
 
 document.addEventListener('DOMContentLoaded', () => {
     initMap();
+    fetchRouteDates();
     fetchStatus();
     fetchHistory();
     fetchStats();
 
     // Auto refresh every 3 seconds for live streaming feel
     setInterval(() => {
-        fetchStatus();
-        fetchHistory();
-        fetchStats();
+        if (selectedRouteDate === 'live') {
+            fetchStatus();
+            fetchHistory();
+            fetchStats();
+        }
     }, 3000);
 
     document.getElementById('btnRecenter').addEventListener('click', recenterMap);
-    document.getElementById('btnRefreshHistory').addEventListener('click', fetchHistory);
+    document.getElementById('btnRefreshHistory').addEventListener('click', () => {
+        if (selectedRouteDate === 'live') {
+            fetchHistory();
+        } else {
+            loadRouteForDate(selectedRouteDate);
+        }
+    });
+
+    const routeSelect = document.getElementById('routeDateSelect');
+    routeSelect.addEventListener('change', (e) => {
+        selectedRouteDate = e.target.value;
+        const modeTag = document.getElementById('routeModeTag');
+
+        if (selectedRouteDate === 'live') {
+            modeTag.textContent = 'Live View';
+            modeTag.className = 'badge-tag';
+            fetchHistory();
+        } else {
+            modeTag.textContent = `Route: ${selectedRouteDate}`;
+            modeTag.className = 'badge-tag active-route';
+            loadRouteForDate(selectedRouteDate);
+        }
+    });
+
+    routeSelect.addEventListener('focus', fetchRouteDates);
 });
 
 function initMap() {
@@ -53,9 +83,11 @@ function initMap() {
 
     map.on('load', () => {
         isMapLoaded = true;
-        // Add GeoJSON LineString source & layer for route breadcrumb trail
+
+        // Add GeoJSON LineString source with lineMetrics enabled for gradient rendering
         map.addSource('route', {
             'type': 'geojson',
+            'lineMetrics': true,
             'data': {
                 'type': 'Feature',
                 'properties': {},
@@ -66,8 +98,9 @@ function initMap() {
             }
         });
 
+        // Base solid line layer for robust visibility
         map.addLayer({
-            'id': 'route',
+            'id': 'route-line-base',
             'type': 'line',
             'source': 'route',
             'layout': {
@@ -77,9 +110,37 @@ function initMap() {
             'paint': {
                 'line-color': '#38bdf8',
                 'line-width': 4,
-                'line-opacity': 0.85
+                'line-opacity': 0.6
             }
         });
+
+        // Top line layer with dynamic time-progress color gradient
+        map.addLayer({
+            'id': 'route-line',
+            'type': 'line',
+            'source': 'route',
+            'layout': {
+                'line-join': 'round',
+                'line-cap': 'round'
+            },
+            'paint': {
+                'line-width': 6,
+                'line-gradient': [
+                    'interpolate',
+                    ['linear'],
+                    ['line-progress'],
+                    0.0, '#38bdf8',  // Trip Start (Sky Blue)
+                    0.25, '#3b82f6', // Royal Blue
+                    0.50, '#a855f7', // Vibrant Purple
+                    0.75, '#ec4899', // Hot Pink
+                    1.00, '#ef4444'  // Trip End (Coral Red)
+                ]
+            }
+        });
+
+        if (selectedRouteDate !== 'live') {
+            loadRouteForDate(selectedRouteDate);
+        }
     });
 }
 
@@ -93,6 +154,31 @@ function recenterMap() {
     }
 }
 
+async function fetchRouteDates() {
+    try {
+        const resp = await fetch('/api/routes/dates');
+        if (!resp.ok) return;
+        const dates = await resp.json();
+
+        const select = document.getElementById('routeDateSelect');
+        const currentVal = select.value;
+        select.innerHTML = '<option value="live">Live / Recent Stream</option>';
+
+        dates.forEach(d => {
+            const opt = document.createElement('option');
+            opt.value = d;
+            opt.textContent = `Route: ${d}`;
+            select.appendChild(opt);
+        });
+
+        if (currentVal && Array.from(select.options).some(o => o.value === currentVal)) {
+            select.value = currentVal;
+        }
+    } catch (err) {
+        console.warn('Error fetching route dates:', err);
+    }
+}
+
 async function fetchStatus() {
     try {
         const resp = await fetch('/api/status');
@@ -102,7 +188,7 @@ async function fetchStatus() {
         updateStatusBadge(data);
         updateStudentCard(data.student);
 
-        if (data.latest_location) {
+        if (data.latest_location && selectedRouteDate === 'live') {
             updateLocationCard(data.latest_location);
             updateMapPosition(data.latest_location);
         }
@@ -179,37 +265,46 @@ function updateMapPosition(loc) {
         busMarker.getPopup().setHTML(`
             <b>Bus #${loc.asset_unique_id || '53'}</b><br>
             Speed: ${Math.round(loc.speed || 0)} mph<br>
-            Time: ${loc.log_time ? loc.log_time.split('T')[1]?.split('.')[0] : 'N/A'}
+            Time: ${loc.log_time ? formatTimeStr(loc.log_time) : 'N/A'}
         `);
     }
 }
 
 async function fetchHistory() {
     try {
-        const resp = await fetch('/api/locations?limit=50');
+        const resp = await fetch('/api/locations?limit=100');
         if (!resp.ok) return;
         const locations = await resp.json();
 
         renderHistoryTable(locations);
-        renderRoutePolyline(locations);
+        renderRoutePolyline(locations, true);
     } catch (err) {
         console.warn('Error fetching history:', err);
+    }
+}
+
+async function loadRouteForDate(dateStr) {
+    try {
+        const resp = await fetch(`/api/routes/by-date?date=${encodeURIComponent(dateStr)}`);
+        if (!resp.ok) return;
+        const routeData = await resp.json();
+
+        renderHistoryTable(routeData.locations);
+        renderRoutePolyline(routeData.locations, false);
+    } catch (err) {
+        console.warn(`Error loading route for ${dateStr}:`, err);
     }
 }
 
 function renderHistoryTable(locations) {
     const tbody = document.getElementById('historyTableBody');
     if (!locations || locations.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="empty-cell">No bus location points recorded yet.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="empty-cell">No bus location points recorded for this selection.</td></tr>';
         return;
     }
 
     tbody.innerHTML = locations.map(r => {
-        let timeStr = r.log_time || r.received_at || 'N/A';
-        if (timeStr.includes('T')) {
-            const parts = timeStr.split('T');
-            timeStr = `${parts[0]} ${parts[1].split('.')[0]}`;
-        }
+        let timeStr = formatTimeStr(r.log_time || r.received_at);
         const speedStr = r.speed !== null ? `${Math.round(r.speed)} mph` : '0 mph';
         const latStr = r.latitude ? r.latitude.toFixed(5) : '--';
         const lonStr = r.longitude ? r.longitude.toFixed(5) : '--';
@@ -226,15 +321,37 @@ function renderHistoryTable(locations) {
     }).join('');
 }
 
-function renderRoutePolyline(locations) {
-    if (!map || !isMapLoaded || !locations || locations.length === 0) return;
+function renderRoutePolyline(locations, isLive) {
+    if (!map || !isMapLoaded) return;
 
-    // Filter valid coords and reverse to get chronological path [lng, lat]
-    const points = locations
+    if (!locations || locations.length === 0) {
+        const routeSource = map.getSource('route');
+        if (routeSource) {
+            routeSource.setData({
+                'type': 'Feature',
+                'properties': {},
+                'geometry': { 'type': 'LineString', 'coordinates': [] }
+            });
+        }
+        clearWaypointMarkers();
+        updateSummaryBar(0, 0, '--:--', '--:--');
+        return;
+    }
+
+    // Sort locations in chronological ascending order
+    const chronoLocations = [...locations].sort((a, b) => {
+        const timeA = new Date(a.log_time || a.received_at || 0);
+        const timeB = new Date(b.log_time || b.received_at || 0);
+        return timeA - timeB;
+    });
+
+    const coordinates = chronoLocations
         .filter(r => r.latitude && r.longitude)
-        .map(r => [r.longitude, r.latitude])
-        .reverse();
+        .map(r => [r.longitude, r.latitude]);
 
+    if (coordinates.length === 0) return;
+
+    // Update GeoJSON route line source
     const routeSource = map.getSource('route');
     if (routeSource) {
         routeSource.setData({
@@ -242,9 +359,131 @@ function renderRoutePolyline(locations) {
             'properties': {},
             'geometry': {
                 'type': 'LineString',
-                'coordinates': points
+                'coordinates': coordinates
             }
         });
+
+        // Trigger line-gradient paint property update for MapLibre GL JS
+        if (map.getLayer('route-line')) {
+            map.setPaintProperty('route-line', 'line-gradient', [
+                'interpolate',
+                ['linear'],
+                ['line-progress'],
+                0.0, '#38bdf8',  // Trip Start (Sky Blue)
+                0.25, '#3b82f6', // Royal Blue
+                0.50, '#a855f7', // Vibrant Purple
+                0.75, '#ec4899', // Hot Pink
+                1.00, '#ef4444'  // Trip End (Coral Red)
+            ]);
+        }
+    }
+
+    // Calculate total distance & time range
+    const distanceMiles = calculateRouteDistanceMiles(coordinates);
+    const startTimeStr = formatTimeStr(chronoLocations[0].log_time || chronoLocations[0].received_at);
+    const endTimeStr = formatTimeStr(chronoLocations[chronoLocations.length - 1].log_time || chronoLocations[chronoLocations.length - 1].received_at);
+
+    updateSummaryBar(chronoLocations.length, distanceMiles, startTimeStr, endTimeStr);
+
+    // Update Bus Marker & Location Card to latest point of route
+    if (!isLive && chronoLocations.length > 0) {
+        const lastLoc = chronoLocations[chronoLocations.length - 1];
+        updateLocationCard(lastLoc);
+        updateMapPosition(lastLoc);
+    }
+
+    // Set Waypoint Start/End Markers
+    clearWaypointMarkers();
+
+    if (coordinates.length > 1) {
+        const startPoint = coordinates[0];
+        const endPoint = coordinates[coordinates.length - 1];
+
+        // 🟢 Start Waypoint Marker
+        const startEl = document.createElement('div');
+        startEl.className = 'start-marker-pin';
+        startEl.innerHTML = '🟢';
+        startEl.title = `Start: ${startTimeStr}`;
+
+        const startPopup = new maplibregl.Popup({ offset: 20 })
+            .setHTML(`<b>Trip Start</b><br>Time: ${startTimeStr}`);
+
+        startMarker = new maplibregl.Marker({ element: startEl })
+            .setLngLat(startPoint)
+            .setPopup(startPopup)
+            .addTo(map);
+
+        // 🔴 End Waypoint Marker
+        const endEl = document.createElement('div');
+        endEl.className = 'end-marker-pin';
+        endEl.innerHTML = isLive ? '🏁' : '🔴';
+        endEl.title = `End: ${endTimeStr}`;
+
+        const endPopup = new maplibregl.Popup({ offset: 20 })
+            .setHTML(`<b>Trip End</b><br>Time: ${endTimeStr}`);
+
+        endMarker = new maplibregl.Marker({ element: endEl })
+            .setLngLat(endPoint)
+            .setPopup(endPopup)
+            .addTo(map);
+    }
+
+    // Fit map bounds to show full route path if specific date selected
+    if (!isLive && coordinates.length > 0) {
+        const bounds = new maplibregl.LngLatBounds();
+        coordinates.forEach(coord => bounds.extend(coord));
+        map.fitBounds(bounds, { padding: 60, maxZoom: 16 });
+    }
+}
+
+function clearWaypointMarkers() {
+    if (startMarker) {
+        startMarker.remove();
+        startMarker = null;
+    }
+    if (endMarker) {
+        endMarker.remove();
+        endMarker = null;
+    }
+}
+
+function updateSummaryBar(pointCount, distanceMiles, startTime, endTime) {
+    document.getElementById('routePointCount').textContent = pointCount;
+    document.getElementById('routeDistance').textContent = `${distanceMiles.toFixed(2)} mi`;
+    document.getElementById('routeTimeRange').textContent = `${startTime} → ${endTime}`;
+}
+
+function calculateRouteDistanceMiles(coords) {
+    let total = 0;
+    for (let i = 0; i < coords.length - 1; i++) {
+        total += haversineMiles(coords[i][1], coords[i][0], coords[i + 1][1], coords[i + 1][0]);
+    }
+    return total;
+}
+
+function haversineMiles(lat1, lon1, lat2, lon2) {
+    const R = 3958.8; // Radius of the Earth in miles
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
+
+function formatTimeStr(isoOrRaw) {
+    if (!isoOrRaw) return 'N/A';
+    try {
+        if (isoOrRaw.includes('T')) {
+            const parts = isoOrRaw.split('T');
+            const timePart = parts[1].split('.')[0];
+            return `${parts[0]} ${timePart}`;
+        }
+        return isoOrRaw;
+    } catch (e) {
+        return isoOrRaw;
     }
 }
 
@@ -254,8 +493,11 @@ async function fetchStats() {
         if (!resp.ok) return;
         const data = await resp.json();
 
-        document.getElementById('statTotalPoints').textContent = data.total_points || 0;
-        document.getElementById('statMaxSpeed').textContent = `Max Speed: ${Math.round(data.max_speed || 0)} mph`;
+        const totalPtsEl = document.getElementById('statTotalPoints');
+        if (totalPtsEl) totalPtsEl.textContent = data.total_points || 0;
+
+        const maxSpdEl = document.getElementById('statMaxSpeed');
+        if (maxSpdEl) maxSpdEl.textContent = `Max Speed: ${Math.round(data.max_speed || 0)} mph`;
     } catch (err) {
         console.warn('Error fetching stats:', err);
     }

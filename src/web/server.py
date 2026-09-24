@@ -4,7 +4,7 @@ from aiohttp import web
 from sqlalchemy import select, func
 from lib.config import settings
 from lib.scheduler import get_active_window_info, is_bus_active_time
-from lib.db import AsyncSessionLocal, get_recent_bus_locations
+from lib.db import AsyncSessionLocal, get_recent_bus_locations, get_route_dates, get_route_by_date
 from lib.models import BusLocation, StudentRecord
 
 logger = logging.getLogger("myride.web")
@@ -109,6 +109,42 @@ async def handle_api_stats(request):
         "avg_speed": avg_speed,
     })
 
+async def handle_api_route_dates(request):
+    async with AsyncSessionLocal() as session:
+        dates = await get_route_dates(session)
+    return web.json_response(dates)
+
+async def handle_api_route_by_date(request):
+    date_str = request.query.get("date")
+    async with AsyncSessionLocal() as session:
+        if not date_str:
+            dates = await get_route_dates(session)
+            if dates:
+                date_str = dates[0]
+            else:
+                return web.json_response({"date": None, "total_points": 0, "locations": []})
+        
+        records = await get_route_by_date(session, date_str)
+
+    items = [
+        {
+            "id": r.id,
+            "asset_unique_id": r.asset_unique_id,
+            "latitude": r.latitude,
+            "longitude": r.longitude,
+            "heading": r.heading,
+            "speed": r.speed,
+            "log_time": r.log_time,
+            "received_at": r.received_at.isoformat() if r.received_at else None,
+        }
+        for r in records
+    ]
+    return web.json_response({
+        "date": date_str,
+        "total_points": len(items),
+        "locations": items
+    })
+
 def create_web_app():
     app = web.Application()
     static_dir = os.path.join(os.path.dirname(__file__), "static")
@@ -118,6 +154,8 @@ def create_web_app():
     app.router.add_get("/api/status", handle_api_status)
     app.router.add_get("/api/locations", handle_api_locations)
     app.router.add_get("/api/stats", handle_api_stats)
+    app.router.add_get("/api/routes/dates", handle_api_route_dates)
+    app.router.add_get("/api/routes/by-date", handle_api_route_by_date)
     app.router.add_static("/static/", static_dir, name="static")
 
     return app

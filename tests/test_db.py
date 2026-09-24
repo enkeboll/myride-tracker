@@ -2,7 +2,7 @@ import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from lib.models import Base
-from lib.db import save_bus_location, save_student, get_recent_bus_locations
+from lib.db import save_bus_location, save_student, get_recent_bus_locations, get_route_dates, get_route_by_date
 
 @pytest_asyncio.fixture
 async def in_memory_db():
@@ -39,3 +39,19 @@ async def test_save_student(in_memory_db: AsyncSession, student_info_fixture):
     assert record.student_id == 181166
     assert record.first_name == "SOREN"
     assert record.active_vehicle == "53"
+
+@pytest.mark.asyncio
+async def test_get_route_dates_and_by_date(in_memory_db: AsyncSession, ws_location_payload):
+    location_data = ws_location_payload["arguments"][0]
+    raw_payload = "{\"type\":1,\"target\":\"NewLocation\"}"
+
+    # Insert location with specific log_time
+    location_data["logTime"] = "2026-09-24T08:15:00.0000000Z"
+    await save_bus_location(in_memory_db, location_data, raw_payload)
+
+    dates = await get_route_dates(in_memory_db)
+    assert "2026-09-24" in dates
+
+    route_points = await get_route_by_date(in_memory_db, "2026-09-24")
+    assert len(route_points) == 1
+    assert route_points[0].asset_unique_id == "53"

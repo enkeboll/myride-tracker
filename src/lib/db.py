@@ -1,7 +1,7 @@
 import os
 import json
 from datetime import datetime, timezone
-from sqlalchemy import event, select
+from sqlalchemy import event, select, func
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from .config import settings
 from .models import Base, BusLocation, StudentRecord
@@ -79,5 +79,28 @@ async def save_student(session: AsyncSession, data: dict, tenant_id: str = None)
 
 async def get_recent_bus_locations(session: AsyncSession, limit: int = 50):
     stmt = select(BusLocation).order_by(BusLocation.id.desc()).limit(limit)
+    result = await session.execute(stmt)
+    return result.scalars().all()
+
+async def get_route_dates(session: AsyncSession):
+    stmt = select(func.distinct(func.substr(BusLocation.log_time, 1, 10))).where(
+        BusLocation.log_time.is_not(None)
+    )
+    result = await session.execute(stmt)
+    raw_dates = result.scalars().all()
+    dates = [d for d in raw_dates if d and len(d) == 10 and d[4] == '-' and d[7] == '-']
+    if not dates:
+        stmt_rec = select(func.distinct(func.strftime('%Y-%m-%d', BusLocation.received_at))).where(
+            BusLocation.received_at.is_not(None)
+        )
+        result_rec = await session.execute(stmt_rec)
+        dates = [d for d in result_rec.scalars().all() if d]
+    return sorted(list(set(dates)), reverse=True)
+
+async def get_route_by_date(session: AsyncSession, date_str: str):
+    stmt = select(BusLocation).where(
+        (func.substr(BusLocation.log_time, 1, 10) == date_str) |
+        (func.strftime('%Y-%m-%d', BusLocation.received_at) == date_str)
+    ).order_by(BusLocation.id.asc())
     result = await session.execute(stmt)
     return result.scalars().all()

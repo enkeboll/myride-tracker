@@ -33,5 +33,18 @@ async def test_web_app_index_and_api():
         assert resp_stats.status == 200
         data_stats = await resp_stats.json()
         assert "total_points" in data_stats
+
+        # Test API route dates endpoint
+        resp_dates = await client.get("/api/routes/dates")
+        assert resp_dates.status == 200
+        data_dates = await resp_dates.json()
+        assert isinstance(data_dates, list)
+
+        # Test API route by-date endpoint
+        resp_route = await client.get("/api/routes/by-date")
+        assert resp_route.status == 200
+        data_route = await resp_route.json()
+        assert "total_points" in data_route
+        assert "locations" in data_route
     finally:
         await client.close()

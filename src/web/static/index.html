@@ -14,7 +14,7 @@
     <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" crossorigin="" />
     
     <!-- Custom Styles -->
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/style.css?v=v2_gradient">
 </head>
 <body>
     <div class="app-container">
@@ -105,8 +105,14 @@
             <!-- Left Side: Interactive Vector Map -->
             <section class="card map-card">
                 <div class="card-header">
-                    <h2>CARTO Vector Map</h2>
+                    <div class="card-title-group">
+                        <h2>CARTO Vector Map</h2>
+                        <span class="badge-tag" id="routeModeTag">Live View</span>
+                    </div>
                     <div class="map-controls">
+                        <select id="routeDateSelect" class="select-sm">
+                            <option value="live">Live / Recent Stream</option>
+                        </select>
                         <button class="btn btn-sm" id="btnRecenter">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <circle cx="12" cy="12" r="10"></circle>
@@ -115,11 +121,37 @@
                                 <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
                                 <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
                             </svg>
-                            Recenter Bus
+                            Recenter
                         </button>
                     </div>
                 </div>
+
+                <!-- Route Analytics Summary Bar -->
+                <div class="route-summary-bar" id="routeSummaryBar">
+                    <div class="route-stat">
+                        <span class="route-stat-label">Route Points</span>
+                        <span class="route-stat-val" id="routePointCount">0</span>
+                    </div>
+                    <div class="route-stat-divider"></div>
+                    <div class="route-stat">
+                        <span class="route-stat-label">Est. Distance</span>
+                        <span class="route-stat-val" id="routeDistance">0.0 mi</span>
+                    </div>
+                    <div class="route-stat-divider"></div>
+                    <div class="route-stat">
+                        <span class="route-stat-label">Trip Time Range</span>
+                        <span class="route-stat-val" id="routeTimeRange">--:-- to --:--</span>
+                    </div>
+                </div>
+
                 <div id="map" class="map-container"></div>
+
+                <!-- Time Gradient Legend -->
+                <div class="gradient-legend-container">
+                    <span class="legend-label start">🌅 Start (Early)</span>
+                    <div class="gradient-bar"></div>
+                    <span class="legend-label end">🌆 End (Late)</span>
+                </div>
             </section>
 
             <!-- Right Side: Recent History Table -->
@@ -158,6 +190,6 @@
     <!-- MapLibre GL JS -->
     <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js" crossorigin=""></script>
     <!-- App Script -->
-    <script src="/static/app.js"></script>
+    <script src="/static/app.js?v=v4_fixed_stats"></script>
 </body>
 </html>
