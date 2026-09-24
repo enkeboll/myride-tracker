@@ -8,3 +8,4 @@ myride.db-shm
 data/
 .pytest_cache/
 *.har
+.DS_Store
