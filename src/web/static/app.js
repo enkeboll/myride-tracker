@@ -1,4 +1,4 @@
-// MyRide K12 Front-End Application Logic with Time-Based Gradient Route Map
+// MyRide K12 Front-End Application Logic with Interactive Time Gradient Scrubber Timeline
 
 let map = null;
 let busMarker = null;
@@ -7,6 +7,10 @@ let endMarker = null;
 let latestCoords = null;
 let isMapLoaded = false;
 let selectedRouteDate = 'live'; // 'live' or 'YYYY-MM-DD'
+
+let currentRouteLocations = [];
+let isPinned = false;
+let pinnedIndex = -1;
 
 document.addEventListener('DOMContentLoaded', () => {
     initMap();
@@ -17,15 +21,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Auto refresh every 3 seconds for live streaming feel
     setInterval(() => {
-        if (selectedRouteDate === 'live') {
+        if (selectedRouteDate === 'live' && !isPinned) {
             fetchStatus();
             fetchHistory();
             fetchStats();
         }
     }, 3000);
 
-    document.getElementById('btnRecenter').addEventListener('click', recenterMap);
+    document.getElementById('btnRecenter').addEventListener('click', () => {
+        unpinTimeline();
+        recenterMap();
+    });
+
     document.getElementById('btnRefreshHistory').addEventListener('click', () => {
+        unpinTimeline();
         if (selectedRouteDate === 'live') {
             fetchHistory();
         } else {
@@ -37,6 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
     routeSelect.addEventListener('change', (e) => {
         selectedRouteDate = e.target.value;
         const modeTag = document.getElementById('routeModeTag');
+        unpinTimeline();
 
         if (selectedRouteDate === 'live') {
             modeTag.textContent = 'Live View';
@@ -50,6 +60,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     routeSelect.addEventListener('focus', fetchRouteDates);
+
+    // Setup Interactive Time Gradient Scrubber Controls
+    setupInteractiveTimeline();
 });
 
 function initMap() {
@@ -70,16 +83,57 @@ function initMap() {
 
     map.addControl(new maplibregl.NavigationControl(), 'top-right');
 
-    // Create custom HTML element for Bus Pin Marker
+    // Create custom HTML element for Top-Down School Bus Marker
     const el = document.createElement('div');
     el.className = 'bus-marker-pin';
-    el.innerHTML = '🚌';
+    el.innerHTML = `
+        <svg class="bus-svg" viewBox="0 0 32 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <!-- Drop Shadow / Glow -->
+          <rect x="3" y="6" width="26" height="46" rx="8" fill="#000000" opacity="0.45" filter="blur(3px)"/>
+          
+          <!-- Side Mirrors (Left & Right) -->
+          <rect x="0" y="12" width="3" height="6" rx="1.5" fill="#0f172a"/>
+          <rect x="29" y="12" width="3" height="6" rx="1.5" fill="#0f172a"/>
 
-    const popup = new maplibregl.Popup({ offset: 25 }).setHTML('<b>Bus Tracker</b><br>Initial Location');
-    busMarker = new maplibregl.Marker({ element: el })
-        .setLngLat([defaultLon, defaultLat])
-        .setPopup(popup)
-        .addTo(map);
+          <!-- Bus Body (Classic School Bus Yellow) -->
+          <rect x="3" y="4" width="26" height="48" rx="8" fill="#facc15" stroke="#eab308" stroke-width="2"/>
+
+          <!-- Front Curved Hood Accent -->
+          <path d="M7 4 H25 V9 C25 11, 7 11, 7 9 Z" fill="#eab308"/>
+          
+          <!-- Directional Arrow on Hood -->
+          <path d="M16 5 L11 10 H21 Z" fill="#ffffff" opacity="0.95"/>
+
+          <!-- Front Windshield -->
+          <path d="M6 12 C6 11, 26 11, 26 12 L25 16 C25 17, 7 17, 7 16 Z" fill="#0f172a"/>
+
+          <!-- Side Window Strips (Left & Right) -->
+          <rect x="4.5" y="19" width="2" height="26" rx="1" fill="#1e293b"/>
+          <rect x="25.5" y="19" width="2" height="26" rx="1" fill="#1e293b"/>
+
+          <!-- Roof Emergency Escape Hatch & Roof Ridges -->
+          <rect x="11" y="24" width="10" height="11" rx="2" fill="#ca8a04" stroke="#a16207" stroke-width="1.5"/>
+          <line x1="8" y1="20" x2="24" y2="20" stroke="#ca8a04" stroke-width="1.5"/>
+          <line x1="8" y1="39" x2="24" y2="39" stroke="#ca8a04" stroke-width="1.5"/>
+
+          <!-- Rear Window -->
+          <rect x="7" y="47" width="18" height="3" rx="1" fill="#0f172a"/>
+
+          <!-- Rear Red Stop / Brake Lights -->
+          <circle cx="6.5" cy="50" r="1.8" fill="#ef4444"/>
+          <circle cx="25.5" cy="50" r="1.8" fill="#ef4444"/>
+        </svg>
+    `;
+
+    const popup = new maplibregl.Popup({ offset: 30 }).setHTML('<b>Bus Tracker</b><br>Initial Location');
+    busMarker = new maplibregl.Marker({
+        element: el,
+        rotationAlignment: 'map',
+        pitchAlignment: 'map'
+    })
+    .setLngLat([defaultLon, defaultLat])
+    .setPopup(popup)
+    .addTo(map);
 
     map.on('load', () => {
         isMapLoaded = true;
@@ -144,6 +198,119 @@ function initMap() {
     });
 }
 
+function setupInteractiveTimeline() {
+    const wrapper = document.getElementById('gradientBarWrapper');
+    const scrubber = document.getElementById('gradientScrubber');
+    const tooltip = document.getElementById('timelineTooltip');
+
+    if (!wrapper || !scrubber || !tooltip) return;
+
+    wrapper.addEventListener('mousemove', (e) => {
+        if (!currentRouteLocations || currentRouteLocations.length === 0) return;
+
+        const rect = wrapper.getBoundingClientRect();
+        const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+        const idx = Math.round(pct * (currentRouteLocations.length - 1));
+        const loc = currentRouteLocations[idx];
+
+        if (!loc) return;
+
+        // Position scrubber & tooltip along gradient bar
+        scrubber.classList.remove('hidden');
+        tooltip.classList.remove('hidden');
+
+        scrubber.style.left = `${pct * 100}%`;
+        tooltip.style.left = `${pct * 100}%`;
+
+        const timeStr = formatShortTimeStr(loc.log_time || loc.received_at);
+        const speedStr = loc.speed !== null ? `${Math.round(loc.speed)} mph` : '0 mph';
+
+        if (isPinned && pinnedIndex === idx) {
+            tooltip.textContent = `📍 Pinned: ${timeStr} (${speedStr})`;
+        } else {
+            tooltip.textContent = `${timeStr} • ${speedStr}`;
+        }
+
+        // Preview bus location on map
+        updateLocationCard(loc);
+        updateMapPosition(loc);
+    });
+
+    wrapper.addEventListener('click', (e) => {
+        if (!currentRouteLocations || currentRouteLocations.length === 0) return;
+
+        const rect = wrapper.getBoundingClientRect();
+        const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+        const idx = Math.round(pct * (currentRouteLocations.length - 1));
+        const loc = currentRouteLocations[idx];
+
+        if (!loc) return;
+
+        isPinned = true;
+        pinnedIndex = idx;
+
+        scrubber.classList.add('pinned');
+        const timeStr = formatShortTimeStr(loc.log_time || loc.received_at);
+        const speedStr = loc.speed !== null ? `${Math.round(loc.speed)} mph` : '0 mph';
+
+        tooltip.textContent = `📍 Pinned: ${timeStr} (${speedStr})`;
+
+        updateLocationCard(loc);
+        updateMapPosition(loc);
+
+        // Open popup on map for pinned location
+        if (busMarker) {
+            busMarker.getPopup().setHTML(`
+                <b>📍 Pinned Location</b><br>
+                Bus #${loc.asset_unique_id || '53'}<br>
+                Time: ${timeStr}<br>
+                Speed: ${speedStr}
+            `);
+            if (!busMarker.getPopup().isOpen()) {
+                busMarker.togglePopup();
+            }
+        }
+    });
+
+    wrapper.addEventListener('mouseleave', () => {
+        if (isPinned && pinnedIndex >= 0 && currentRouteLocations[pinnedIndex]) {
+            const loc = currentRouteLocations[pinnedIndex];
+            const pct = pinnedIndex / Math.max(1, currentRouteLocations.length - 1);
+            scrubber.style.left = `${pct * 100}%`;
+            tooltip.style.left = `${pct * 100}%`;
+            const timeStr = formatShortTimeStr(loc.log_time || loc.received_at);
+            const speedStr = loc.speed !== null ? `${Math.round(loc.speed)} mph` : '0 mph';
+            tooltip.textContent = `📍 Pinned: ${timeStr} (${speedStr})`;
+            updateLocationCard(loc);
+            updateMapPosition(loc);
+        } else {
+            scrubber.classList.add('hidden');
+            tooltip.classList.add('hidden');
+            scrubber.classList.remove('pinned');
+
+            if (selectedRouteDate === 'live' && currentRouteLocations.length > 0) {
+                const latest = currentRouteLocations[currentRouteLocations.length - 1];
+                updateLocationCard(latest);
+                updateMapPosition(latest);
+            }
+        }
+    });
+}
+
+function unpinTimeline() {
+    isPinned = false;
+    pinnedIndex = -1;
+    const scrubber = document.getElementById('gradientScrubber');
+    const tooltip = document.getElementById('timelineTooltip');
+    if (scrubber) {
+        scrubber.classList.add('hidden');
+        scrubber.classList.remove('pinned');
+    }
+    if (tooltip) {
+        tooltip.classList.add('hidden');
+    }
+}
+
 function recenterMap() {
     if (latestCoords && map) {
         map.flyTo({
@@ -188,7 +355,7 @@ async function fetchStatus() {
         updateStatusBadge(data);
         updateStudentCard(data.student);
 
-        if (data.latest_location && selectedRouteDate === 'live') {
+        if (data.latest_location && selectedRouteDate === 'live' && !isPinned) {
             updateLocationCard(data.latest_location);
             updateMapPosition(data.latest_location);
         }
@@ -236,13 +403,8 @@ function updateLocationCard(loc) {
     const heading = loc.heading !== null ? `${Math.round(loc.heading)}°` : 'N/A';
     document.getElementById('statHeading').textContent = `Heading: ${heading}`;
 
-    if (loc.log_time) {
-        try {
-            const dateObj = new Date(loc.log_time);
-            document.getElementById('statLogTime').textContent = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        } catch (e) {
-            document.getElementById('statLogTime').textContent = loc.log_time.split('T')[1]?.split('.')[0] || loc.log_time;
-        }
+    if (loc.log_time || loc.received_at) {
+        document.getElementById('statLogTime').textContent = formatShortTimeStr(loc.log_time || loc.received_at);
     }
 
     if (loc.received_at) {
@@ -258,14 +420,17 @@ function updateMapPosition(loc) {
     if (!loc || !loc.latitude || !loc.longitude) return;
     const lat = loc.latitude;
     const lon = loc.longitude;
+    const heading = (loc.heading !== null && loc.heading !== undefined) ? loc.heading : 0;
 
     latestCoords = { lat, lon };
     if (busMarker) {
         busMarker.setLngLat([lon, lat]);
+        busMarker.setRotation(heading);
         busMarker.getPopup().setHTML(`
             <b>Bus #${loc.asset_unique_id || '53'}</b><br>
             Speed: ${Math.round(loc.speed || 0)} mph<br>
-            Time: ${loc.log_time ? formatTimeStr(loc.log_time) : 'N/A'}
+            Heading: ${Math.round(heading)}°<br>
+            Time: ${formatShortTimeStr(loc.log_time || loc.received_at)}
         `);
     }
 }
@@ -304,7 +469,7 @@ function renderHistoryTable(locations) {
     }
 
     tbody.innerHTML = locations.map(r => {
-        let timeStr = formatTimeStr(r.log_time || r.received_at);
+        let timeStr = formatShortTimeStr(r.log_time || r.received_at);
         const speedStr = r.speed !== null ? `${Math.round(r.speed)} mph` : '0 mph';
         const latStr = r.latitude ? r.latitude.toFixed(5) : '--';
         const lonStr = r.longitude ? r.longitude.toFixed(5) : '--';
@@ -325,6 +490,7 @@ function renderRoutePolyline(locations, isLive) {
     if (!map || !isMapLoaded) return;
 
     if (!locations || locations.length === 0) {
+        currentRouteLocations = [];
         const routeSource = map.getSource('route');
         if (routeSource) {
             routeSource.setData({
@@ -344,6 +510,11 @@ function renderRoutePolyline(locations, isLive) {
         const timeB = new Date(b.log_time || b.received_at || 0);
         return timeA - timeB;
     });
+
+    currentRouteLocations = chronoLocations;
+    if (!isPinned) {
+        unpinTimeline();
+    }
 
     const coordinates = chronoLocations
         .filter(r => r.latitude && r.longitude)
@@ -380,13 +551,19 @@ function renderRoutePolyline(locations, isLive) {
 
     // Calculate total distance & time range
     const distanceMiles = calculateRouteDistanceMiles(coordinates);
-    const startTimeStr = formatTimeStr(chronoLocations[0].log_time || chronoLocations[0].received_at);
-    const endTimeStr = formatTimeStr(chronoLocations[chronoLocations.length - 1].log_time || chronoLocations[chronoLocations.length - 1].received_at);
+    const startTimeStr = formatShortTimeStr(chronoLocations[0].log_time || chronoLocations[0].received_at);
+    const endTimeStr = formatShortTimeStr(chronoLocations[chronoLocations.length - 1].log_time || chronoLocations[chronoLocations.length - 1].received_at);
 
     updateSummaryBar(chronoLocations.length, distanceMiles, startTimeStr, endTimeStr);
 
-    // Update Bus Marker & Location Card to latest point of route
-    if (!isLive && chronoLocations.length > 0) {
+    // Update Timeline Start/End Labels
+    const startLabelEl = document.getElementById('legendStartTime');
+    const endLabelEl = document.getElementById('legendEndTime');
+    if (startLabelEl) startLabelEl.textContent = `🌅 ${startTimeStr}`;
+    if (endLabelEl) endLabelEl.textContent = `🌆 ${endTimeStr}`;
+
+    // Update Bus Marker & Location Card to latest point of route if not pinned
+    if (!isLive && chronoLocations.length > 0 && !isPinned) {
         const lastLoc = chronoLocations[chronoLocations.length - 1];
         updateLocationCard(lastLoc);
         updateMapPosition(lastLoc);
@@ -429,7 +606,7 @@ function renderRoutePolyline(locations, isLive) {
     }
 
     // Fit map bounds to show full route path if specific date selected
-    if (!isLive && coordinates.length > 0) {
+    if (!isLive && coordinates.length > 0 && !isPinned) {
         const bounds = new maplibregl.LngLatBounds();
         coordinates.forEach(coord => bounds.extend(coord));
         map.fitBounds(bounds, { padding: 60, maxZoom: 16 });
@@ -473,13 +650,20 @@ function haversineMiles(lat1, lon1, lat2, lon2) {
     return R * c;
 }
 
-function formatTimeStr(isoOrRaw) {
-    if (!isoOrRaw) return 'N/A';
+function formatShortTimeStr(isoOrRaw) {
+    if (!isoOrRaw) return '--:--';
     try {
+        const d = new Date(isoOrRaw);
+        if (!isNaN(d.getTime())) {
+            return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        }
         if (isoOrRaw.includes('T')) {
-            const parts = isoOrRaw.split('T');
-            const timePart = parts[1].split('.')[0];
-            return `${parts[0]} ${timePart}`;
+            const timePart = isoOrRaw.split('T')[1].split('.')[0];
+            const [h, m] = timePart.split(':');
+            const hour = parseInt(h, 10);
+            const ampm = hour >= 12 ? 'PM' : 'AM';
+            const h12 = hour % 12 || 12;
+            return `${h12}:${m} ${ampm}`;
         }
         return isoOrRaw;
     } catch (e) {

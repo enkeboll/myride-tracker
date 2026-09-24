@@ -14,7 +14,7 @@
     <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" crossorigin="" />
     
     <!-- Custom Styles -->
-    <link rel="stylesheet" href="/static/style.css?v=v2_gradient">
+    <link rel="stylesheet" href="/static/style.css?v=v6_bus_heading">
 </head>
 <body>
     <div class="app-container">
@@ -146,11 +146,15 @@
 
                 <div id="map" class="map-container"></div>
 
-                <!-- Time Gradient Legend -->
-                <div class="gradient-legend-container">
-                    <span class="legend-label start">🌅 Start (Early)</span>
-                    <div class="gradient-bar"></div>
-                    <span class="legend-label end">🌆 End (Late)</span>
+                <!-- Time Gradient Legend & Interactive Scrub Timeline -->
+                <div class="gradient-legend-container" id="gradientLegendContainer">
+                    <span class="legend-label start" id="legendStartTime">🌅 --:--</span>
+                    <div class="gradient-bar-wrapper" id="gradientBarWrapper">
+                        <div class="gradient-bar" id="gradientBar"></div>
+                        <div class="gradient-scrubber hidden" id="gradientScrubber"></div>
+                        <div class="timeline-tooltip hidden" id="timelineTooltip">--:--</div>
+                    </div>
+                    <span class="legend-label end" id="legendEndTime">🌆 --:--</span>
                 </div>
             </section>
 
@@ -190,6 +194,6 @@
     <!-- MapLibre GL JS -->
     <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js" crossorigin=""></script>
     <!-- App Script -->
-    <script src="/static/app.js?v=v4_fixed_stats"></script>
+    <script src="/static/app.js?v=v6_bus_heading"></script>
 </body>
 </html>
