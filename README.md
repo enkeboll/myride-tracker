@@ -135,8 +135,21 @@ pre-commit run --all-files
 
 ## Synology NAS / Docker Deployment
 
-When deploying to Synology NAS via Docker Container Manager:
+### 1. Docker Compose (CLI)
+
+When deploying via CLI or SSH:
 
 ```bash
-docker-compose up -d --build
+docker compose -f docker-compose.prod.yml pull
+docker compose -f docker-compose.prod.yml up -d
 ```
+
+### 2. Synology DSM Container Manager (GUI)
+
+When updating a deployed **Project** in Synology DSM Container Manager to pull a new `:latest` image build:
+
+> [!NOTE] > **DSM UI Image Caching**: Restarting or rebuilding a Project in DSM Container Manager reuses the locally cached image layer tag. To force Container Manager to download a fresh `:latest` build from the remote registry, perform the following steps:
+
+1. **Clean Project**: Open **Container Manager** $\rightarrow$ **Project**, select your `myride-tracker` project, and choose **Action** $\rightarrow$ **Clean**.
+2. **Delete Image**: Go to the **Image** tab, select the cached image (`ghcr.io/enkeboll/myride-tracker:latest` or local image), and click **Delete**.
+3. **Build Project**: Return to **Project**, select your project, and click **Action** $\rightarrow$ **Build** (or **Update**). Container Manager will now fetch the newly updated image from the registry and start the updated container.
