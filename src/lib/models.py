@@ -48,6 +48,20 @@ class StudentRecord(Base):
     stop_lat: Mapped[float | None] = mapped_column(Float, nullable=True)
     stop_lon: Mapped[float | None] = mapped_column(Float, nullable=True)
     stop_address: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    stop_time: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    eta_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    pickup_lat: Mapped[float | None] = mapped_column(Float, nullable=True)
+    pickup_lon: Mapped[float | None] = mapped_column(Float, nullable=True)
+    pickup_address: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    pickup_time: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    pickup_eta_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    dropoff_lat: Mapped[float | None] = mapped_column(Float, nullable=True)
+    dropoff_lon: Mapped[float | None] = mapped_column(Float, nullable=True)
+    dropoff_address: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    dropoff_time: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    dropoff_eta_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 

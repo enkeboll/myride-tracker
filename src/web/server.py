@@ -13,6 +13,7 @@ from lib.db import (
     get_static_locations,
 )
 from lib.models import BusLocation, StudentRecord
+from lib.osrm import calculate_eta_to_stop
 from lib.scheduler import get_active_window_info
 
 logger = logging.getLogger("myride.web")
@@ -61,6 +62,8 @@ async def handle_api_status(request):
         }
 
     student_dict = None
+    eta_info = None
+
     if student:
         student_dict = {
             "student_id": student.student_id,
@@ -68,7 +71,27 @@ async def handle_api_status(request):
             "last_name": student.last_name,
             "location_name": student.location_name,
             "active_vehicle": student.active_vehicle,
+            "pickup_address": student.pickup_address or student.stop_address,
+            "pickup_time": student.pickup_time or student.stop_time,
+            "pickup_eta_minutes": student.pickup_eta_minutes
+            if student.pickup_eta_minutes is not None
+            else student.eta_minutes,
+            "dropoff_address": student.dropoff_address,
+            "dropoff_time": student.dropoff_time,
+            "dropoff_eta_minutes": student.dropoff_eta_minutes,
         }
+
+        # Calculate live ETA targeting the Pickup stop location
+        pickup_lat = student.pickup_lat or student.stop_lat or 41.01436
+        pickup_lon = student.pickup_lon or student.stop_lon or -73.85389
+        if latest_loc:
+            eta_info = calculate_eta_to_stop(
+                bus_lat=latest_loc.latitude,
+                bus_lon=latest_loc.longitude,
+                bus_speed_mph=latest_loc.speed,
+                stop_lat=pickup_lat,
+                stop_lon=pickup_lon,
+            )
 
     payload = {
         "is_active_window": is_active,
@@ -77,6 +100,7 @@ async def handle_api_status(request):
         "status_message": msg,
         "latest_location": latest_loc_dict,
         "student": student_dict,
+        "eta_info": eta_info,
     }
     return web.json_response(payload)
 

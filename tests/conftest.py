@@ -35,6 +35,17 @@ def student_info_fixture():
                     "visibleName": "ACR44 AM CRS MINI",
                     "rolloutBusNumber": "53",
                     "assetUniqueId": "53",
+                    "stopsInfo": [
+                        {
+                            "actionType": "Dropoff",
+                            "stopAddress": "331 Ashford Ave",
+                            "stopAddressFull": "331 Ashford Ave, Dobbs Ferry 10522",
+                            "stopTime": "1900-01-01T15:32:20",
+                            "stopLat": 41.014357,
+                            "stopLong": -73.853889,
+                            "etaMinutes": 0,
+                        }
+                    ],
                 }
             ],
         }

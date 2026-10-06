@@ -377,13 +377,16 @@ async function fetchRouteDates() {
     if (!resp.ok) return;
     const dates = await resp.json();
 
-    // Store sorted ascending ('2026-09-14' ... '2026-09-23')
     availableDates = dates.sort();
 
     initDatePicker();
-    updateDateNavButtons();
 
-    checkAndSetOffHoursDefaultDate();
+    if (selectedRouteDate === 'live') {
+      loadLiveRoute();
+    } else {
+      updateDateNavButtons();
+      checkAndSetOffHoursDefaultDate();
+    }
   } catch (err) {
     console.warn('Error fetching route dates:', err);
   }
@@ -420,16 +423,25 @@ function initDatePicker() {
       }
     },
   });
+
+  if (selectedRouteDate === 'live' && availableDates.length > 0) {
+    fpInstance.setDate(availableDates[availableDates.length - 1], false);
+  }
 }
 
 function selectRouteDate(dateStr) {
+  if (dateStr === 'live') {
+    switchToLiveView();
+    return;
+  }
+
   selectedRouteDate = dateStr;
   unpinTimeline();
 
   const modeTag = document.getElementById('routeModeTag');
   const btnLive = document.getElementById('btnLiveToggle');
 
-  if (fpInstance && dateStr !== 'live') {
+  if (fpInstance) {
     fpInstance.setDate(dateStr, false);
   }
 
@@ -456,50 +468,72 @@ function switchToLiveView() {
   const modeTag = document.getElementById('routeModeTag');
   const btnLive = document.getElementById('btnLiveToggle');
 
-  if (fpInstance) {
-    fpInstance.clear();
-  }
-
   btnLive.className = 'btn btn-sm btn-live active';
   modeTag.textContent = 'Live View';
   modeTag.className = 'badge-tag';
 
+  loadLiveRoute();
+}
+
+async function loadLiveRoute() {
+  if (availableDates.length === 0) {
+    if (fpInstance) fpInstance.clear();
+    updateDateNavButtons();
+    return;
+  }
+
+  const liveDate = availableDates[availableDates.length - 1];
+  if (fpInstance) {
+    fpInstance.setDate(liveDate, false);
+  }
+
+  try {
+    const resp = await fetch(`/api/routes/by-date?date=${encodeURIComponent(liveDate)}`);
+    if (!resp.ok) return;
+    const routeData = await resp.json();
+
+    if (isDebugMode) {
+      renderHistoryTable(routeData.locations);
+    }
+    renderRoutePolyline(routeData.vector_coords, routeData.locations, routeData.distance_miles, true);
+  } catch (err) {
+    console.warn(`Error loading live route for ${liveDate}:`, err);
+  }
+
   updateDateNavButtons();
-  fetchHistory();
 }
 
 function jumpToAdjacentDate(direction) {
   if (availableDates.length === 0) return;
 
-  if (selectedRouteDate === 'live') {
-    // If in live view and clicking prev (-1), jump to latest available date
-    if (direction < 0) {
-      selectRouteDate(availableDates[availableDates.length - 1]);
-    }
-    return;
-  }
+  const currentRefDate = selectedRouteDate === 'live' ? availableDates[availableDates.length - 1] : selectedRouteDate;
 
-  const idx = availableDates.indexOf(selectedRouteDate);
   if (direction < 0) {
-    // Find largest date < selectedRouteDate
+    // Find largest date < currentRefDate
     let prevDate = null;
     for (let i = availableDates.length - 1; i >= 0; i--) {
-      if (availableDates[i] < selectedRouteDate) {
+      if (availableDates[i] < currentRefDate) {
         prevDate = availableDates[i];
         break;
       }
     }
     if (prevDate) selectRouteDate(prevDate);
   } else if (direction > 0) {
-    // Find smallest date > selectedRouteDate
+    // Find smallest date > currentRefDate
     let nextDate = null;
     for (let i = 0; i < availableDates.length; i++) {
-      if (availableDates[i] > selectedRouteDate) {
+      if (availableDates[i] > currentRefDate) {
         nextDate = availableDates[i];
         break;
       }
     }
-    if (nextDate) selectRouteDate(nextDate);
+    if (nextDate) {
+      if (nextDate === availableDates[availableDates.length - 1]) {
+        switchToLiveView();
+      } else {
+        selectRouteDate(nextDate);
+      }
+    }
   }
 }
 
@@ -507,20 +541,18 @@ function updateDateNavButtons() {
   const btnPrev = document.getElementById('btnPrevDay');
   const btnNext = document.getElementById('btnNextDay');
 
+  if (!btnPrev || !btnNext) return;
+
   if (availableDates.length === 0) {
     btnPrev.disabled = true;
     btnNext.disabled = true;
     return;
   }
 
-  if (selectedRouteDate === 'live') {
-    btnPrev.disabled = false; // Prev jumps to latest date with data
-    btnNext.disabled = true; // In live view, no "next" date
-    return;
-  }
+  const currentRefDate = selectedRouteDate === 'live' ? availableDates[availableDates.length - 1] : selectedRouteDate;
 
-  const hasPrev = availableDates.some((d) => d < selectedRouteDate);
-  const hasNext = availableDates.some((d) => d > selectedRouteDate);
+  const hasPrev = availableDates.some((d) => d < currentRefDate);
+  const hasNext = availableDates.some((d) => d > currentRefDate);
 
   btnPrev.disabled = !hasPrev;
   btnNext.disabled = !hasNext;
@@ -659,15 +691,83 @@ async function fetchStatus() {
 
     updateStatusBadge(data);
     updateStudentCard(data.student);
+    updateEtaCard(data.eta_info, data.student);
 
     if (isOffHours && !hasInitializedDefaultDate) {
       checkAndSetOffHoursDefaultDate();
     } else if (data.latest_location && selectedRouteDate === 'live' && !isPinned) {
       updateLocationCard(data.latest_location);
       updateMapPosition(data.latest_location);
+      appendLiveLocationToRoute(data.latest_location);
     }
   } catch (err) {
     console.warn('Error fetching status:', err);
+  }
+}
+
+function appendLiveLocationToRoute(loc) {
+  if (!loc || !loc.latitude || !loc.longitude) return;
+  if (!currentRouteLocations) currentRouteLocations = [];
+
+  const isDuplicate = currentRouteLocations.some(
+    (p) => p.id === loc.id || (p.log_time && loc.log_time && p.log_time === loc.log_time)
+  );
+
+  if (!isDuplicate) {
+    currentRouteLocations.push(loc);
+
+    if (map && isMapLoaded) {
+      const routeSource = map.getSource('route');
+      if (routeSource) {
+        const coords = currentRouteLocations.map((p) => [p.longitude, p.latitude]);
+        routeSource.setData({
+          type: 'Feature',
+          properties: {},
+          geometry: {
+            type: 'LineString',
+            coordinates: coords,
+          },
+        });
+      }
+
+      if (currentRouteLocations.length === 1) {
+        renderRoutePolyline(null, currentRouteLocations, 0.0, true);
+      } else if (endMarker) {
+        endMarker.setLngLat([loc.longitude, loc.latitude]);
+      }
+    }
+
+    const coords = currentRouteLocations.map((p) => [p.longitude, p.latitude]);
+    const distanceMiles = calculateRouteDistanceMiles(coords);
+    const startTimeStr = formatShortTimeStr(currentRouteLocations[0].log_time || currentRouteLocations[0].received_at);
+    const endTimeStr = formatShortTimeStr(loc.log_time || loc.received_at);
+
+    updateSummaryBar(currentRouteLocations.length, distanceMiles, startTimeStr, endTimeStr);
+
+    const endLabelEl = document.getElementById('legendEndTime');
+    if (endLabelEl) endLabelEl.textContent = `🌆 ${endTimeStr}`;
+  }
+}
+
+function updateEtaCard(etaInfo, student) {
+  const valElem = document.getElementById('statEtaValue');
+  const footerElem = document.getElementById('statEtaFooter');
+
+  if (!valElem || !footerElem) return;
+
+  const pickupTime = student && student.pickup_time ? `Sched: ${student.pickup_time}` : 'Pickup Stop';
+
+  if (student && student.pickup_eta_minutes !== null && student.pickup_eta_minutes !== undefined) {
+    const tylerEtaStr =
+      student.pickup_eta_minutes === 0 ? 'Arriving' : `${student.pickup_eta_minutes} mins (Tyler API)`;
+    valElem.textContent = tylerEtaStr;
+    footerElem.textContent = `Pickup Stop • ${pickupTime}`;
+  } else if (etaInfo && etaInfo.eta_text) {
+    valElem.textContent = etaInfo.eta_text;
+    footerElem.textContent = `Pickup Stop • ${pickupTime}`;
+  } else {
+    valElem.textContent = '--';
+    footerElem.textContent = `Pickup Stop • ${pickupTime}`;
   }
 }
 

@@ -49,6 +49,18 @@ async def init_db():
             ("stop_lat", "FLOAT"),
             ("stop_lon", "FLOAT"),
             ("stop_address", "VARCHAR(200)"),
+            ("stop_time", "VARCHAR(50)"),
+            ("eta_minutes", "INTEGER"),
+            ("pickup_lat", "FLOAT"),
+            ("pickup_lon", "FLOAT"),
+            ("pickup_address", "VARCHAR(200)"),
+            ("pickup_time", "VARCHAR(50)"),
+            ("pickup_eta_minutes", "INTEGER"),
+            ("dropoff_lat", "FLOAT"),
+            ("dropoff_lon", "FLOAT"),
+            ("dropoff_address", "VARCHAR(200)"),
+            ("dropoff_time", "VARCHAR(50)"),
+            ("dropoff_eta_minutes", "INTEGER"),
         ]:
             try:
                 await conn.execute(text(f"ALTER TABLE students ADD COLUMN {col_name} {col_type}"))
@@ -139,9 +151,18 @@ async def save_student(session: AsyncSession, data: dict, tenant_id: str = None)
 
     sch_lat = None
     sch_lon = None
-    st_lat = None
-    st_lon = None
-    st_addr_str = None
+
+    pickup_lat = None
+    pickup_lon = None
+    pickup_addr_str = None
+    pickup_time = None
+    pickup_eta = None
+
+    dropoff_lat = None
+    dropoff_lon = None
+    dropoff_addr_str = None
+    dropoff_time = None
+    dropoff_eta = None
 
     if runs and isinstance(runs, list):
         for run in runs:
@@ -152,10 +173,31 @@ async def save_student(session: AsyncSession, data: dict, tenant_id: str = None)
                 if loc_name and not sch_lat:
                     sch_lat = s.get("stopLat")
                     sch_lon = s.get("stopLong")
-                if action in ("Dropoff", "Pickup") and not st_lat:
-                    st_lat = s.get("stopLat")
-                    st_lon = s.get("stopLong")
-                    st_addr_str = s.get("stopAddressFull") or s.get("stopAddress")
+
+                raw_time = s.get("stopTime")
+                formatted_time = None
+                if raw_time and "T" in str(raw_time):
+                    time_part = str(raw_time).split("T")[-1]
+                    formatted_time = time_part[:5]  # e.g., "08:28" or "15:20"
+
+                if action == "Pickup" and not pickup_lat:
+                    pickup_lat = s.get("stopLat")
+                    pickup_lon = s.get("stopLong")
+                    pickup_addr_str = s.get("stopAddressFull") or s.get("stopAddress")
+                    pickup_time = formatted_time
+                    pickup_eta = s.get("etaMinutes")
+                elif action == "Dropoff" and not dropoff_lat:
+                    dropoff_lat = s.get("stopLat")
+                    dropoff_lon = s.get("stopLong")
+                    dropoff_addr_str = s.get("stopAddressFull") or s.get("stopAddress")
+                    dropoff_time = formatted_time
+                    dropoff_eta = s.get("etaMinutes")
+
+    st_lat = pickup_lat or dropoff_lat
+    st_lon = pickup_lon or dropoff_lon
+    st_addr_str = pickup_addr_str or dropoff_addr_str
+    st_time = pickup_time or dropoff_time
+    st_eta = pickup_eta if pickup_eta is not None else dropoff_eta
 
     record = StudentRecord(
         student_id=student_id,
@@ -173,6 +215,18 @@ async def save_student(session: AsyncSession, data: dict, tenant_id: str = None)
         stop_lat=st_lat,
         stop_lon=st_lon,
         stop_address=st_addr_str,
+        stop_time=st_time,
+        eta_minutes=st_eta,
+        pickup_lat=pickup_lat,
+        pickup_lon=pickup_lon,
+        pickup_address=pickup_addr_str,
+        pickup_time=pickup_time,
+        pickup_eta_minutes=pickup_eta,
+        dropoff_lat=dropoff_lat,
+        dropoff_lon=dropoff_lon,
+        dropoff_address=dropoff_addr_str,
+        dropoff_time=dropoff_time,
+        dropoff_eta_minutes=dropoff_eta,
         updated_at=datetime.now(timezone.utc),
     )
     await session.merge(record)
@@ -349,7 +403,9 @@ async def get_or_create_daily_route(session: AsyncSession, date_str: str):
     res = await session.execute(stmt)
     cached_route = res.scalar_one_or_none()
 
-    if cached_route:
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    if cached_route and date_str != today_str and len(raw_records) <= cached_route.point_count:
         try:
             vector_coords = json.loads(cached_route.route_geojson)
             return {

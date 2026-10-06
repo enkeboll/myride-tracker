@@ -77,3 +77,42 @@ async def match_route_osrm(raw_coords: list[tuple[float, float]]) -> list[tuple[
         logger.warning("Failed to match route via public OSRM API (using raw points fallback): %s", e)
 
     return raw_coords
+
+
+def calculate_eta_to_stop(
+    bus_lat: float,
+    bus_lon: float,
+    bus_speed_mph: float | None,
+    stop_lat: float | None,
+    stop_lon: float | None,
+) -> dict:
+    """Calculate real-time ETA information from current bus location to student bus stop."""
+    if not stop_lat or not stop_lon:
+        return {
+            "eta_minutes": None,
+            "eta_text": "Stop location unavailable",
+            "distance_miles": None,
+        }
+
+    dist_miles = haversine_miles(bus_lat, bus_lon, stop_lat, stop_lon)
+
+    if dist_miles < 0.05:
+        return {
+            "eta_minutes": 0,
+            "eta_text": "Bus at stop",
+            "distance_miles": round(dist_miles, 2),
+        }
+
+    effective_speed = bus_speed_mph if (bus_speed_mph and bus_speed_mph > 5.0) else 20.0
+    eta_minutes = int(round((dist_miles / effective_speed) * 60))
+
+    if eta_minutes <= 1:
+        eta_text = f"Arriving (~{round(dist_miles, 1)} mi)"
+    else:
+        eta_text = f"~{eta_minutes} mins ({round(dist_miles, 1)} mi)"
+
+    return {
+        "eta_minutes": eta_minutes,
+        "eta_text": eta_text,
+        "distance_miles": round(dist_miles, 2),
+    }
